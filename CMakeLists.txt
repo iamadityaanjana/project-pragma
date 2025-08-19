@@ -17,6 +17,9 @@ set(SOURCES
     src/primitives/utils.cpp
     src/core/transaction.cpp
     src/core/merkle.cpp
+    src/core/block.cpp
+    src/core/difficulty.cpp
+    src/core/chainstate.cpp
 )
 
 # Headers
@@ -26,6 +29,9 @@ set(HEADERS
     src/primitives/utils.h
     src/core/transaction.h
     src/core/merkle.h
+    src/core/block.h
+    src/core/difficulty.h
+    src/core/chainstate.h
 )
 
 # Main executable
@@ -43,7 +49,28 @@ if(BUILD_TESTS)
     find_package(GTest)
     if(GTest_FOUND)
         enable_testing()
-        add_subdirectory(tests)
+        
+        add_executable(pragma_tests
+            tests/test_transaction.cpp
+            tests/test_merkle.cpp
+            tests/test_block.cpp
+            tests/test_difficulty.cpp
+            tests/test_chainstate.cpp
+            ${SOURCES}
+        )
+        
+        target_link_libraries(pragma_tests 
+            GTest::gtest 
+            GTest::gtest_main 
+            OpenSSL::SSL 
+            OpenSSL::Crypto
+        )
+        
+        # Discover tests
+        include(GoogleTest)
+        gtest_discover_tests(pragma_tests)
+    else()
+        message(STATUS "GTest not found, tests will not be built")
     endif()
 endif()
 

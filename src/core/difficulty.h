@@ -1,0 +1,48 @@
+#pragma once
+
+#include <string>
+#include <cstdint>
+
+namespace pragma {
+
+/**
+ * Difficulty and target management for proof-of-work
+ */
+class Difficulty {
+public:
+    // Convert compact bits representation to target hex string
+    static std::string bitsToTarget(uint32_t bits);
+    
+    // Convert target hex string to compact bits representation
+    static uint32_t targetToBits(const std::string& target);
+    
+    // Check if a hash meets the difficulty target
+    static bool meetsTarget(const std::string& hash, uint32_t bits);
+    static bool meetsTarget(const std::string& hash, const std::string& target);
+    
+    // Calculate work for a given target (for chain selection)
+    static std::string calculateWork(uint32_t bits);
+    
+    // Difficulty adjustment (Bitcoin-style)
+    static uint32_t adjustDifficulty(uint32_t currentBits, 
+                                   uint64_t actualTimespan, 
+                                   uint64_t targetTimespan);
+    
+    // Helper functions for target comparison
+    static bool isValidTarget(const std::string& target);
+    static int compareTargets(const std::string& hash, const std::string& target);
+    
+    // Constants
+    static const uint32_t MAX_BITS = 0x207fffff;  // Maximum difficulty (minimum work)
+    static const uint64_t TARGET_BLOCK_TIME = 30; // 30 seconds per block
+    static const uint32_t DIFFICULTY_ADJUSTMENT_INTERVAL = 10; // Adjust every 10 blocks
+    
+private:
+    // Helper for big integer operations on hex strings
+    static std::string hexAdd(const std::string& a, const std::string& b);
+    static std::string hexMultiply(const std::string& hex, uint64_t multiplier);
+    static std::string hexDivide(const std::string& hex, uint64_t divisor);
+    static bool hexLessThan(const std::string& a, const std::string& b);
+};
+
+} // namespace pragma
