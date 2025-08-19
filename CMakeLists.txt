@@ -20,6 +20,7 @@ set(SOURCES
     src/core/block.cpp
     src/core/difficulty.cpp
     src/core/chainstate.cpp
+    src/core/utxo.cpp
 )
 
 # Headers
@@ -32,6 +33,7 @@ set(HEADERS
     src/core/block.h
     src/core/difficulty.h
     src/core/chainstate.h
+    src/core/utxo.h
 )
 
 # Main executable
@@ -56,6 +58,7 @@ if(BUILD_TESTS)
             tests/test_block.cpp
             tests/test_difficulty.cpp
             tests/test_chainstate.cpp
+            tests/test_utxo.cpp
             ${SOURCES}
         )
         

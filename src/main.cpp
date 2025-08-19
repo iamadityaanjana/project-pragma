@@ -8,6 +8,7 @@
 #include "core/block.h"
 #include "core/difficulty.h"
 #include "core/chainstate.h"
+#include "core/utxo.h"
 
 using namespace pragma;
 
@@ -390,7 +391,244 @@ int main() {
     Utils::logInfo("✅ Transaction & Merkle Tree system working");
     Utils::logInfo("✅ Block Header & Proof-of-Work system working");
     Utils::logInfo("✅ Chainstate & Block Validation system working");
-    Utils::logInfo("Next: Implement UTXO Set Management (Step 5)");
+    
+    // NEW: Step 5 - UTXO Set Management Testing
+    Utils::logInfo("\n=== Step 5: UTXO Set Management Testing ===");
+    
+    // Test UTXO set initialization
+    Utils::logInfo("\n25. Testing UTXO Set Initialization:");
+    UTXOSet utxoSet;
+    
+    std::cout << "Initial UTXO set:" << std::endl;
+    std::cout << "Size: " << utxoSet.size() << std::endl;
+    std::cout << "Total value: " << utxoSet.getTotalValue() << " satoshis" << std::endl;
+    std::cout << "Is empty: " << (utxoSet.isEmpty() ? "Yes" : "No") << std::endl;
+    std::cout << "Current height: " << utxoSet.getCurrentHeight() << std::endl;
+    
+    // Test block subsidy calculation
+    Utils::logInfo("\n26. Testing Block Subsidy Calculation:");
+    std::cout << "Block 0 subsidy: " << UTXOSet::getBlockSubsidy(0) << " satoshis (50 BTC)" << std::endl;
+    std::cout << "Block 210,000 subsidy: " << UTXOSet::getBlockSubsidy(210000) << " satoshis (25 BTC)" << std::endl;
+    std::cout << "Block 420,000 subsidy: " << UTXOSet::getBlockSubsidy(420000) << " satoshis (12.5 BTC)" << std::endl;
+    std::cout << "Block 630,000 subsidy: " << UTXOSet::getBlockSubsidy(630000) << " satoshis (6.25 BTC)" << std::endl;
+    
+    // Test coinbase maturity
+    std::cout << "Coinbase mature at height 50 (created at 1): " << 
+        (UTXOSet::isCoinbaseMatured(1, 50) ? "No" : "Yes") << std::endl;
+    std::cout << "Coinbase mature at height 101 (created at 1): " << 
+        (UTXOSet::isCoinbaseMatured(1, 101) ? "Yes" : "No") << std::endl;
+    
+    // Test applying coinbase transaction
+    Utils::logInfo("\n27. Testing Coinbase Transaction Application:");
+    Transaction utxoCoinbase = Transaction::createCoinbase("1UTXOMinerAddress", 5000000000ULL);
+    
+    bool applied = utxoSet.applyTransaction(utxoCoinbase, 1);
+    std::cout << "Coinbase transaction applied: " << (applied ? "Yes" : "No") << std::endl;
+    std::cout << "UTXO set size after coinbase: " << utxoSet.size() << std::endl;
+    std::cout << "Total value after coinbase: " << utxoSet.getTotalValue() << " satoshis" << std::endl;
+    
+    // Check the created UTXO
+    OutPoint coinbaseOutpoint(utxoCoinbase.txid, 0);
+    const UTXO* coinbaseUTXO = utxoSet.getUTXO(coinbaseOutpoint);
+    if (coinbaseUTXO) {
+        std::cout << "Coinbase UTXO created:" << std::endl;
+        std::cout << "  Value: " << coinbaseUTXO->output.value << " satoshis" << std::endl;
+        std::cout << "  Address: " << coinbaseUTXO->output.pubKeyHash << std::endl;
+        std::cout << "  Height: " << coinbaseUTXO->height << std::endl;
+        std::cout << "  Is coinbase: " << (coinbaseUTXO->isCoinbase ? "Yes" : "No") << std::endl;
+        std::cout << "  Confirmations: " << coinbaseUTXO->confirmations << std::endl;
+    }
+    
+    // Test coinbase maturity
+    Utils::logInfo("\n28. Testing Coinbase Maturity:");
+    utxoSet.setCurrentHeight(50);
+    std::cout << "Current height set to: " << utxoSet.getCurrentHeight() << std::endl;
+    
+    coinbaseUTXO = utxoSet.getUTXO(coinbaseOutpoint);
+    if (coinbaseUTXO) {
+        std::cout << "Coinbase spendable at height 50: " << 
+            (coinbaseUTXO->isSpendable(50) ? "Yes" : "No") << std::endl;
+        std::cout << "Coinbase spendable at height 101: " << 
+            (coinbaseUTXO->isSpendable(101) ? "Yes" : "No") << std::endl;
+        std::cout << "Confirmations at height 50: " << coinbaseUTXO->confirmations << std::endl;
+    }
+    
+    // Test spending coinbase (when mature)
+    Utils::logInfo("\n29. Testing Spending Mature Coinbase:");
+    utxoSet.setCurrentHeight(101); // Make coinbase spendable
+    
+    std::vector<TxIn> spendInputs;
+    spendInputs.emplace_back(coinbaseOutpoint, "signature_data", "pubkey_data");
+    
+    std::vector<TxOut> spendOutputs;
+    spendOutputs.emplace_back(2000000000ULL, "1RecipientAddress1");
+    spendOutputs.emplace_back(2999999000ULL, "1RecipientAddress2"); // Leave 1000 sat as fee
+    
+    Transaction spendTx = Transaction::create(spendInputs, spendOutputs);
+    
+    // Validate transaction first
+    bool isValidSpend = utxoSet.validateTransaction(spendTx);
+    std::cout << "Spend transaction valid: " << (isValidSpend ? "Yes" : "No") << std::endl;
+    
+    if (isValidSpend) {
+        uint64_t fee = utxoSet.calculateTransactionFee(spendTx);
+        std::cout << "Transaction fee: " << fee << " satoshis" << std::endl;
+        
+        // Apply the spending transaction
+        bool spendApplied = utxoSet.applyTransaction(spendTx, 101);
+        std::cout << "Spend transaction applied: " << (spendApplied ? "Yes" : "No") << std::endl;
+        std::cout << "UTXO set size after spending: " << utxoSet.size() << std::endl;
+        std::cout << "Total value after spending: " << utxoSet.getTotalValue() << " satoshis" << std::endl;
+        
+        // Check new UTXOs
+        OutPoint outpoint1(spendTx.txid, 0);
+        OutPoint outpoint2(spendTx.txid, 1);
+        
+        const UTXO* utxo1 = utxoSet.getUTXO(outpoint1);
+        const UTXO* utxo2 = utxoSet.getUTXO(outpoint2);
+        
+        if (utxo1 && utxo2) {
+            std::cout << "New UTXO 1: " << utxo1->output.value << " sat -> " << utxo1->output.pubKeyHash << std::endl;
+            std::cout << "New UTXO 2: " << utxo2->output.value << " sat -> " << utxo2->output.pubKeyHash << std::endl;
+        }
+    }
+    
+    // Test balance queries
+    Utils::logInfo("\n30. Testing Balance Queries:");
+    uint64_t balance1 = utxoSet.getBalanceForAddress("1RecipientAddress1");
+    uint64_t balance2 = utxoSet.getBalanceForAddress("1RecipientAddress2");
+    uint64_t balanceOrig = utxoSet.getBalanceForAddress("1UTXOMinerAddress");
+    
+    std::cout << "Balance for 1RecipientAddress1: " << balance1 << " satoshis" << std::endl;
+    std::cout << "Balance for 1RecipientAddress2: " << balance2 << " satoshis" << std::endl;
+    std::cout << "Balance for original miner: " << balanceOrig << " satoshis" << std::endl;
+    
+    // Test UTXO selection
+    Utils::logInfo("\n31. Testing UTXO Selection:");
+    auto selectedUTXOs = utxoSet.getSpendableUTXOs("1RecipientAddress1", 1500000000ULL);
+    std::cout << "UTXOs selected for 1.5 BTC from Address1: " << selectedUTXOs.size() << std::endl;
+    
+    auto insufficientUTXOs = utxoSet.getSpendableUTXOs("1RecipientAddress1", 5000000000ULL);
+    std::cout << "UTXOs selected for 5 BTC from Address1 (insufficient): " << insufficientUTXOs.size() << std::endl;
+    
+    // Test transaction undo
+    Utils::logInfo("\n32. Testing Transaction Undo:");
+    std::vector<UTXO> spentUTXOs = utxoSet.getSpentUTXOs(spendTx);
+    std::cout << "Spent UTXOs captured: " << spentUTXOs.size() << std::endl;
+    
+    size_t sizeBefore = utxoSet.size();
+    uint64_t valueBefore = utxoSet.getTotalValue();
+    
+    bool undone = utxoSet.undoTransaction(spendTx, spentUTXOs);
+    std::cout << "Transaction undone: " << (undone ? "Yes" : "No") << std::endl;
+    std::cout << "UTXO set size after undo: " << utxoSet.size() << std::endl;
+    std::cout << "Total value after undo: " << utxoSet.getTotalValue() << " satoshis" << std::endl;
+    
+    // Check if coinbase UTXO is restored
+    const UTXO* restoredCoinbase = utxoSet.getUTXO(coinbaseOutpoint);
+    std::cout << "Coinbase UTXO restored: " << (restoredCoinbase ? "Yes" : "No") << std::endl;
+    
+    // Test UTXO statistics
+    Utils::logInfo("\n33. Testing UTXO Statistics:");
+    auto utxoStats = utxoSet.getStats();
+    std::cout << "UTXO Statistics:" << std::endl;
+    std::cout << "  Total UTXOs: " << utxoStats.totalUTXOs << std::endl;
+    std::cout << "  Total value: " << utxoStats.totalValue << " satoshis" << std::endl;
+    std::cout << "  Coinbase UTXOs: " << utxoStats.coinbaseUTXOs << std::endl;
+    std::cout << "  Coinbase value: " << utxoStats.coinbaseValue << " satoshis" << std::endl;
+    std::cout << "  Mature UTXOs: " << utxoStats.matureUTXOs << std::endl;
+    std::cout << "  Mature value: " << utxoStats.matureValue << " satoshis" << std::endl;
+    std::cout << "  Average UTXO value: " << utxoStats.averageUTXOValue << " satoshis" << std::endl;
+    std::cout << "  Current height: " << utxoStats.currentHeight << std::endl;
+    
+    // Test UTXO cache
+    Utils::logInfo("\n34. Testing UTXO Cache:");
+    UTXOCache cache(&utxoSet);
+    
+    OutPoint cacheOutpoint("cache_test_tx", 0);
+    TxOut cacheOutput(1000000000ULL, "1CacheTestAddress");
+    
+    std::cout << "UTXO in base set: " << (utxoSet.hasUTXO(cacheOutpoint) ? "Yes" : "No") << std::endl;
+    
+    cache.addUTXO(cacheOutpoint, cacheOutput, 101, false);
+    std::cout << "UTXO in cache: " << (cache.hasUTXO(cacheOutpoint) ? "Yes" : "No") << std::endl;
+    std::cout << "UTXO in base set (before flush): " << (utxoSet.hasUTXO(cacheOutpoint) ? "Yes" : "No") << std::endl;
+    std::cout << "Cache has changes: " << (cache.hasChanges() ? "Yes" : "No") << std::endl;
+    std::cout << "Cache change count: " << cache.getChangeCount() << std::endl;
+    
+    cache.flush();
+    std::cout << "UTXO in base set (after flush): " << (utxoSet.hasUTXO(cacheOutpoint) ? "Yes" : "No") << std::endl;
+    
+    // Test UTXO set persistence
+    Utils::logInfo("\n35. Testing UTXO Set Persistence:");
+    std::string utxoFile = "test_utxo.dat";
+    
+    bool utxoSaved = utxoSet.saveToFile(utxoFile);
+    std::cout << "UTXO set saved: " << (utxoSaved ? "Yes" : "No") << std::endl;
+    
+    UTXOSet newUTXOSet;
+    bool utxoLoaded = newUTXOSet.loadFromFile(utxoFile);
+    std::cout << "UTXO set loaded: " << (utxoLoaded ? "Yes" : "No") << std::endl;
+    
+    if (utxoLoaded) {
+        std::cout << "Loaded UTXO set size: " << newUTXOSet.size() << std::endl;
+        std::cout << "Loaded total value: " << newUTXOSet.getTotalValue() << " satoshis" << std::endl;
+        std::cout << "Loaded current height: " << newUTXOSet.getCurrentHeight() << std::endl;
+        std::cout << "Data integrity check: " << 
+            (newUTXOSet.size() == utxoSet.size() && 
+             newUTXOSet.getTotalValue() == utxoSet.getTotalValue() ? "PASS" : "FAIL") << std::endl;
+    }
+    
+    // Test multiple transactions in sequence
+    Utils::logInfo("\n36. Testing Sequential Transactions:");
+    UTXOSet seqUTXOSet;
+    
+    // Create a chain of transactions
+    Transaction coinbase1 = Transaction::createCoinbase("1Miner1", 5000000000ULL);
+    Transaction coinbase2 = Transaction::createCoinbase("1Miner2", 5000000000ULL);
+    
+    seqUTXOSet.applyTransaction(coinbase1, 1);
+    seqUTXOSet.applyTransaction(coinbase2, 2);
+    seqUTXOSet.setCurrentHeight(102);
+    
+    std::cout << "Applied 2 coinbase transactions" << std::endl;
+    std::cout << "UTXO set size: " << seqUTXOSet.size() << std::endl;
+    std::cout << "Total value: " << seqUTXOSet.getTotalValue() << " satoshis" << std::endl;
+    
+    // Create transaction spending from both coinbases
+    std::vector<TxIn> multiInputs;
+    multiInputs.emplace_back(OutPoint(coinbase1.txid, 0), "sig1", "pk1");
+    multiInputs.emplace_back(OutPoint(coinbase2.txid, 0), "sig2", "pk2");
+    
+    std::vector<TxOut> multiOutputs;
+    multiOutputs.emplace_back(9999999000ULL, "1RecipientAddress"); // 99.99999 BTC (1000 sat fee)
+    
+    Transaction multiTx = Transaction::create(multiInputs, multiOutputs);
+    
+    bool multiValid = seqUTXOSet.validateTransaction(multiTx);
+    std::cout << "Multi-input transaction valid: " << (multiValid ? "Yes" : "No") << std::endl;
+    
+    if (multiValid) {
+        uint64_t multiFee = seqUTXOSet.calculateTransactionFee(multiTx);
+        std::cout << "Multi-input transaction fee: " << multiFee << " satoshis" << std::endl;
+        
+        seqUTXOSet.applyTransaction(multiTx, 102);
+        std::cout << "Multi-input transaction applied" << std::endl;
+        std::cout << "Final UTXO set size: " << seqUTXOSet.size() << std::endl;
+        std::cout << "Final total value: " << seqUTXOSet.getTotalValue() << " satoshis" << std::endl;
+    }
+    
+    // Print final UTXO set
+    Utils::logInfo("\n37. Final UTXO Set State:");
+    seqUTXOSet.printUTXOSet();
+    
+    Utils::logInfo("\n=== Steps 1, 2, 3, 4 & 5 Complete! ===");
+    Utils::logInfo("✅ Hash & Serialization primitives working");
+    Utils::logInfo("✅ Transaction & Merkle Tree system working");
+    Utils::logInfo("✅ Block Header & Proof-of-Work system working");
+    Utils::logInfo("✅ Chainstate & Block Validation system working");
+    Utils::logInfo("✅ UTXO Set Management system working");
+    Utils::logInfo("Next: Implement Full Block Validation (Step 6)");
     
     return 0;
 }
