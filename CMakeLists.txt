@@ -15,6 +15,8 @@ set(SOURCES
     src/primitives/hash.cpp
     src/primitives/serialize.cpp
     src/primitives/utils.cpp
+    src/core/transaction.cpp
+    src/core/merkle.cpp
 )
 
 # Headers
@@ -22,6 +24,8 @@ set(HEADERS
     src/primitives/hash.h
     src/primitives/serialize.h
     src/primitives/utils.h
+    src/core/transaction.h
+    src/core/merkle.h
 )
 
 # Main executable

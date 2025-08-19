@@ -2,11 +2,13 @@
 #include "primitives/hash.h"
 #include "primitives/serialize.h"
 #include "primitives/utils.h"
+#include "core/transaction.h"
+#include "core/merkle.h"
 
 using namespace pragma;
 
 int main() {
-    Utils::logInfo("=== Pragma Blockchain - Step 1: Hash & Serialize Primitives ===");
+    Utils::logInfo("=== Pragma Blockchain - Steps 1 & 2: Primitives + Transactions ===");
     
     // Test hash functions
     Utils::logInfo("\n1. Testing Hash Functions:");
@@ -65,7 +67,59 @@ int main() {
     auto randomBytes = Utils::randomBytes(8);
     std::cout << "Random bytes: " << Hash::toHex(randomBytes) << std::endl;
     
-    Utils::logInfo("\n✅ Hash & Serialize Primitives working!");
+    // NEW: Test transactions
+    Utils::logInfo("\n5. Testing Transactions:");
+    
+    // Create a coinbase transaction
+    Transaction coinbase = Transaction::createCoinbase("1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", 5000000000ULL);
+    std::cout << "Coinbase TXID: " << coinbase.txid << std::endl;
+    std::cout << "Coinbase output value: " << coinbase.getTotalOutput() << " satoshis" << std::endl;
+    std::cout << "Coinbase valid: " << (coinbase.isValid() ? "Yes" : "No") << std::endl;
+    
+    // Create a regular transaction
+    std::vector<TxIn> inputs;
+    inputs.emplace_back(OutPoint(coinbase.txid, 0), "signature_data", "public_key_data");
+    
+    std::vector<TxOut> outputs;
+    outputs.emplace_back(1000000000ULL, "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"); // 10 BTC
+    outputs.emplace_back(3999999000ULL, "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"); // 39.99999 BTC (change)
+    
+    Transaction regularTx = Transaction::create(inputs, outputs);
+    std::cout << "Regular TXID: " << regularTx.txid << std::endl;
+    std::cout << "Regular output value: " << regularTx.getTotalOutput() << " satoshis" << std::endl;
+    std::cout << "Regular valid: " << (regularTx.isValid() ? "Yes" : "No") << std::endl;
+    
+    // Test transaction serialization
+    auto serialized = regularTx.serialize();
+    Transaction deserialized = Transaction::deserialize(serialized);
+    std::cout << "Serialization test: " << (regularTx.txid == deserialized.txid ? "PASS" : "FAIL") << std::endl;
+    
+    // NEW: Test Merkle Tree
+    Utils::logInfo("\n6. Testing Merkle Tree:");
+    
+    std::vector<std::string> txids = {coinbase.txid, regularTx.txid};
+    std::string merkleRoot = MerkleTree::buildMerkleRoot(txids);
+    std::cout << "Merkle root (2 txs): " << merkleRoot << std::endl;
+    
+    // Test with more transactions
+    std::vector<std::string> moreTxids = {
+        coinbase.txid,
+        regularTx.txid,
+        "3333333333333333333333333333333333333333333333333333333333333333",
+        "4444444444444444444444444444444444444444444444444444444444444444"
+    };
+    
+    std::string merkleRoot4 = MerkleTree::buildMerkleRoot(moreTxids);
+    std::cout << "Merkle root (4 txs): " << merkleRoot4 << std::endl;
+    
+    // Test merkle proof
+    auto proof = MerkleTree::generateMerkleProof(moreTxids, 0);
+    bool proofValid = MerkleTree::verifyMerkleProof(moreTxids[0], merkleRoot4, proof, 0);
+    std::cout << "Merkle proof verification: " << (proofValid ? "VALID" : "INVALID") << std::endl;
+    std::cout << "Proof size: " << proof.size() << " hashes" << std::endl;
+    
+    Utils::logInfo("\nSteps 1 & 2 Complete: Hash, Serialize, Transactions & Merkle Tree working!");
+    Utils::logInfo("Next: Implement Block Header & Proof-of-Work structures");
     
     return 0;
 }
