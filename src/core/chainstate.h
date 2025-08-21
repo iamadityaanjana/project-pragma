@@ -65,6 +65,8 @@ public:
     // Chain traversal
     std::vector<std::string> getChainPath(const std::string& fromHash, const std::string& toHash) const;
     std::vector<std::shared_ptr<ChainEntry>> getChain(uint32_t maxHeight = 0) const;
+    const Block* getBlockByHeight(uint32_t height) const;
+    const Block* getBlockByHash(const std::string& hash) const;
     
     // Genesis and initialization
     bool setGenesis(const Block& genesisBlock);

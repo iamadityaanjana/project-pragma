@@ -77,6 +77,7 @@ struct Block {
     uint32_t getTransactionCount() const { return transactions.size(); }
     uint64_t getTotalFees() const;
     uint64_t getBlockReward() const;
+    size_t calculateSize() const;  // Calculate block size in bytes
     
     bool operator==(const Block& other) const;
 };

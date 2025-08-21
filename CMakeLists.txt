@@ -21,6 +21,7 @@ set(SOURCES
     src/core/difficulty.cpp
     src/core/chainstate.cpp
     src/core/utxo.cpp
+    src/core/validator.cpp
 )
 
 # Headers

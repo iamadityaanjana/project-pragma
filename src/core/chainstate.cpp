@@ -563,4 +563,34 @@ bool ChainState::loadFromFile(const std::string& filename) {
     }
 }
 
+const Block* ChainState::getBlockByHeight(uint32_t height) const {
+    if (!bestChainTip || height > bestChainTip->height) {
+        return nullptr;
+    }
+    
+    // Traverse from best tip backwards to find block at height
+    auto current = bestChainTip;
+    while (current && current->height > height) {
+        auto it = blocks.find(current->block.header.prevHash);
+        if (it == blocks.end()) {
+            break;
+        }
+        current = it->second;
+    }
+    
+    if (current && current->height == height) {
+        return &current->block;
+    }
+    
+    return nullptr;
+}
+
+const Block* ChainState::getBlockByHash(const std::string& hash) const {
+    auto it = blocks.find(hash);
+    if (it != blocks.end()) {
+        return &it->second->block;
+    }
+    return nullptr;
+}
+
 } // namespace pragma

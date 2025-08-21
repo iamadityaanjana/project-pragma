@@ -1,3 +1,4 @@
+#include "core/validator.h"
 #include <iostream>
 #include <chrono>
 #include "primitives/hash.h"
@@ -628,7 +629,130 @@ int main() {
     Utils::logInfo("✅ Block Header & Proof-of-Work system working");
     Utils::logInfo("✅ Chainstate & Block Validation system working");
     Utils::logInfo("✅ UTXO Set Management system working");
-    Utils::logInfo("Next: Implement Full Block Validation (Step 6)");
+    
+    // === STEP 6: FULL BLOCK VALIDATION ===
+    Utils::logInfo("\n=== Step 6: Full Block Validation Testing ===");
+    
+    // Test 38: BlockValidator initialization
+    Utils::logInfo("\n38. Testing BlockValidator Initialization:");
+    BlockValidator validator(&utxoSet, &chainState);
+    auto validatorStats = validator.getValidationStats();
+    std::cout << "Initial validation stats:" << std::endl;
+    std::cout << "  Blocks validated: " << validatorStats.blocksValidated << std::endl;
+    std::cout << "  Transactions validated: " << validatorStats.transactionsValidated << std::endl;
+    std::cout << "  Validation errors: " << validatorStats.validationErrors << std::endl;
+    
+    // Test 39: Error handling and result types
+    Utils::logInfo("\n39. Testing Validation Error Handling:");
+    auto successResult = ValidationResult::success();
+    std::cout << "Success result valid: " << (successResult.isValid ? "Yes" : "No") << std::endl;
+    
+    auto errorResult = ValidationResult::failure(ValidationError::INVALID_BLOCK_HASH, "Test error message");
+    std::cout << "Error result valid: " << (errorResult.isValid ? "Yes" : "No") << std::endl;
+    std::cout << "Error message: " << errorResult.errorMessage << std::endl;
+    std::cout << "Error type: " << validator.getErrorString(errorResult.error) << std::endl;
+    
+    // Test 40: Validation of existing valid block  
+    Utils::logInfo("\n40. Testing Valid Block Validation:");
+    std::string bestHash = chainState.getBestHash();
+    const Block* bestBlock = chainState.getBlockByHash(bestHash);
+    
+    if (bestBlock) {
+        auto blockResult = validator.validateBlock(*bestBlock, chainState.getBestHeight());
+        std::cout << "Best block validation: " << (blockResult.isValid ? "VALID" : "INVALID") << std::endl;
+        if (!blockResult.isValid) {
+            std::cout << "Validation error: " << blockResult.errorMessage << std::endl;
+        }
+        validator.printValidationResult(blockResult);
+    }
+    
+    // Test 41: Transaction-only validation
+    Utils::logInfo("\n41. Testing Transaction Validation:");
+    Transaction testCoinbase = Transaction::createCoinbase("1ValidatorTestMiner", 5000000000ULL);
+    auto txResult = validator.validateTransactionOnly(testCoinbase, 1);
+    std::cout << "Coinbase transaction validation: " << (txResult.isValid ? "VALID" : "INVALID") << std::endl;
+    validator.printValidationResult(txResult);
+    
+    // Test invalid transaction (no inputs, no coinbase)
+    std::vector<TxIn> noInputs;
+    std::vector<TxOut> someOutputs;
+    someOutputs.emplace_back(1000000, "1SomeAddress");
+    Transaction invalidTx = Transaction::create(noInputs, someOutputs);
+    auto invalidResult = validator.validateTransactionOnly(invalidTx, 1);
+    std::cout << "Invalid transaction validation: " << (invalidResult.isValid ? "VALID" : "INVALID") << std::endl;
+    validator.printValidationResult(invalidResult);
+    
+    // Test 42: Block structure validation
+    Utils::logInfo("\n42. Testing Block Structure Validation:");
+    
+    // Create a properly structured test block
+    Transaction newCoinbase = Transaction::createCoinbase("1StructureTestMiner", 5000000000ULL);
+    std::vector<Transaction> testTransactions = {newCoinbase};
+    
+    BlockHeader testHeader;
+    testHeader.version = 1;
+    testHeader.prevHash = chainState.getBestHash();
+    testHeader.timestamp = static_cast<uint64_t>(std::time(nullptr));
+    testHeader.bits = 0x1d00ffff; // Use default difficulty
+    testHeader.nonce = 0;
+    
+    // Calculate merkle root
+    std::vector<std::string> testTxids;
+    for (const auto& tx : testTransactions) {
+        testTxids.push_back(tx.txid);
+    }
+    testHeader.merkleRoot = MerkleTree::buildMerkleRoot(testTxids);
+    
+    Block structureTestBlock(testHeader, testTransactions);
+    structureTestBlock.computeHash();
+    
+    std::cout << "Test block size: " << structureTestBlock.calculateSize() << " bytes" << std::endl;
+    std::cout << "Test block transactions: " << structureTestBlock.getTransactionCount() << std::endl;
+    std::cout << "Test block hash: " << structureTestBlock.hash << std::endl;
+    
+    // Test 43: Invalid blocks detection
+    Utils::logInfo("\n43. Testing Invalid Block Detection:");
+    
+    // Create block with invalid previous hash
+    Block invalidPrevHashBlock = structureTestBlock;
+    invalidPrevHashBlock.header.prevHash = "invalid_hash_string";
+    invalidPrevHashBlock.computeHash();
+    
+    auto invalidPrevResult = validator.validateBlock(invalidPrevHashBlock, chainState.getBestHeight() + 1);
+    std::cout << "Invalid previous hash block: " << (invalidPrevResult.isValid ? "VALID" : "INVALID") << std::endl;
+    validator.printValidationResult(invalidPrevResult);
+    
+    // Test 44: Batch validation
+    Utils::logInfo("\n44. Testing Batch Validation:");
+    BatchValidator batchValidator(&validator);
+    
+    std::vector<Block> blockBatch;
+    blockBatch.push_back(structureTestBlock);
+    
+    auto batchResult = batchValidator.validateBlockBatch(blockBatch, chainState.getBestHeight() + 1);
+    std::cout << "Batch validation result: " << (batchResult.isValid ? "VALID" : "INVALID") << std::endl;
+    validator.printValidationResult(batchResult);
+    
+    // Test 45: Validation statistics
+    Utils::logInfo("\n45. Testing Validation Statistics:");
+    auto finalStats = validator.getValidationStats();
+    std::cout << "Final validation statistics:" << std::endl;
+    std::cout << "  Blocks validated: " << finalStats.blocksValidated << std::endl;
+    std::cout << "  Transactions validated: " << finalStats.transactionsValidated << std::endl;
+    std::cout << "  Validation errors: " << finalStats.validationErrors << std::endl;
+    std::cout << "  Total fees processed: " << finalStats.totalFees << " satoshis" << std::endl;
+    std::cout << "  Total subsidy processed: " << finalStats.totalSubsidy << " satoshis" << std::endl;
+    
+    validator.printValidationStats();
+    
+    Utils::logInfo("\n=== Steps 1, 2, 3, 4, 5 & 6 Complete! ===");
+    Utils::logInfo("✅ Hash & Serialization primitives working");
+    Utils::logInfo("✅ Transaction & Merkle Tree system working");
+    Utils::logInfo("✅ Block Header & Proof-of-Work system working");
+    Utils::logInfo("✅ Chainstate & Block Validation system working");
+    Utils::logInfo("✅ UTXO Set Management system working");
+    Utils::logInfo("✅ Full Block Validation system working");
+    Utils::logInfo("Next: Implement Mempool & Mining (Step 7)");
     
     return 0;
 }

@@ -281,6 +281,12 @@ uint64_t Block::getBlockReward() const {
     return transactions[0].getTotalOutput();
 }
 
+size_t Block::calculateSize() const {
+    // Calculate approximate block size by serializing and measuring
+    auto serialized = serialize();
+    return serialized.size();
+}
+
 bool Block::operator==(const Block& other) const {
     return header == other.header &&
            transactions == other.transactions &&
