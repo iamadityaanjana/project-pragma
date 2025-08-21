@@ -22,6 +22,7 @@ set(SOURCES
     src/core/chainstate.cpp
     src/core/utxo.cpp
     src/core/validator.cpp
+    src/core/mempool.cpp
 )
 
 # Headers
@@ -35,6 +36,8 @@ set(HEADERS
     src/core/difficulty.h
     src/core/chainstate.h
     src/core/utxo.h
+    src/core/validator.h
+    src/core/mempool.h
 )
 
 # Main executable

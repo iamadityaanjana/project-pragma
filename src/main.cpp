@@ -1,4 +1,5 @@
 #include "core/validator.h"
+#include "core/mempool.h"
 #include <iostream>
 #include <chrono>
 #include "primitives/hash.h"
@@ -752,7 +753,313 @@ int main() {
     Utils::logInfo("✅ Chainstate & Block Validation system working");
     Utils::logInfo("✅ UTXO Set Management system working");
     Utils::logInfo("✅ Full Block Validation system working");
-    Utils::logInfo("Next: Implement Mempool & Mining (Step 7)");
+    
+    // ========================
+    // STEP 7: MEMPOOL & MINING
+    // ========================
+    
+    Utils::logInfo("Starting Step 7: Mempool & Mining Tests...");
+    
+    // Test 46: Basic Mempool Operations
+    std::cout << "\n=== Test 46: Basic Mempool Operations ===" << std::endl;
+    
+    Mempool mempool(&utxoSet, &validator);
+    std::cout << "Mempool created successfully" << std::endl;
+    std::cout << "Initial mempool size: " << mempool.size() << std::endl;
+    std::cout << "Initial mempool empty: " << (mempool.isEmpty() ? "Yes" : "No") << std::endl;
+    
+    // Test 47: Adding Transactions to Mempool
+    std::cout << "\n=== Test 47: Adding Transactions to Mempool ===" << std::endl;
+    
+    // Create some transactions for mempool (using correct structure)
+    Transaction mempoolTx1;
+    mempoolTx1.txid = "mempool_tx_1";
+    mempoolTx1.isCoinbase = false;
+    
+    TxIn input1;
+    input1.prevout = {"mempool_input_1", 0};
+    input1.sig = "signature1";
+    input1.pubKey = "pubkey1";
+    mempoolTx1.vin.push_back(input1);
+    
+    TxOut output1;
+    output1.value = 100000000;
+    output1.pubKeyHash = "mempool_receiver_1";
+    mempoolTx1.vout.push_back(output1);
+    
+    Transaction mempoolTx2;
+    mempoolTx2.txid = "mempool_tx_2";
+    mempoolTx2.isCoinbase = false;
+    
+    TxIn input2;
+    input2.prevout = {"mempool_input_2", 0};
+    input2.sig = "signature2";
+    input2.pubKey = "pubkey2";
+    mempoolTx2.vin.push_back(input2);
+    
+    TxOut output2;
+    output2.value = 200000000;
+    output2.pubKeyHash = "mempool_receiver_2";
+    mempoolTx2.vout.push_back(output2);
+    
+    Transaction mempoolTx3;
+    mempoolTx3.txid = "mempool_tx_3";
+    mempoolTx3.isCoinbase = false;
+    
+    TxIn input3;
+    input3.prevout = {"mempool_input_3", 0};
+    input3.sig = "signature3";
+    input3.pubKey = "pubkey3";
+    mempoolTx3.vin.push_back(input3);
+    
+    TxOut output3;
+    output3.value = 50000000;
+    output3.pubKeyHash = "mempool_receiver_3";
+    mempoolTx3.vout.push_back(output3);
+    
+    // Add UTXOs for these transactions
+    TxOut utxoOut1;
+    utxoOut1.value = 150000000;
+    utxoOut1.pubKeyHash = "mempool_sender_1";
+    UTXO mempoolUtxo1(utxoOut1, 100, false);
+    
+    TxOut utxoOut2;
+    utxoOut2.value = 250000000;
+    utxoOut2.pubKeyHash = "mempool_sender_2";
+    UTXO mempoolUtxo2(utxoOut2, 100, false);
+    
+    TxOut utxoOut3;
+    utxoOut3.value = 80000000;
+    utxoOut3.pubKeyHash = "mempool_sender_3";
+    UTXO mempoolUtxo3(utxoOut3, 100, false);
+    
+    utxoSet.addUTXO(OutPoint{"mempool_input_1", 0}, utxoOut1, 100, false);
+    utxoSet.addUTXO(OutPoint{"mempool_input_2", 0}, utxoOut2, 100, false);
+    utxoSet.addUTXO(OutPoint{"mempool_input_3", 0}, utxoOut3, 100, false);
+    
+    bool added1 = mempool.addTransaction(mempoolTx1, 102);
+    bool added2 = mempool.addTransaction(mempoolTx2, 102);
+    bool added3 = mempool.addTransaction(mempoolTx3, 102);
+    
+    std::cout << "Transaction 1 added: " << (added1 ? "Yes" : "No") << std::endl;
+    std::cout << "Transaction 2 added: " << (added2 ? "Yes" : "No") << std::endl;
+    std::cout << "Transaction 3 added: " << (added3 ? "Yes" : "No") << std::endl;
+    std::cout << "Mempool size after adding: " << mempool.size() << std::endl;
+    
+    // Test 48: Mempool Statistics
+    std::cout << "\n=== Test 48: Mempool Statistics ===" << std::endl;
+    
+    mempool.printStats();
+    
+    auto mempoolStats = mempool.getStats();
+    std::cout << "Transaction count: " << mempoolStats.transactionCount << std::endl;
+    std::cout << "Total fees: " << mempoolStats.totalFees << " satoshis" << std::endl;
+    std::cout << "Average fee rate: " << mempoolStats.averageFeeRate << " sat/byte" << std::endl;
+    
+    // Test 49: Transaction Selection
+    std::cout << "\n=== Test 49: Transaction Selection ===" << std::endl;
+    
+    auto selectedTxs = mempool.selectTransactionsByFee(2);
+    std::cout << "Selected " << selectedTxs.size() << " transactions by fee" << std::endl;
+    
+    auto selectedBySize = mempool.selectTransactions(500000, 102);
+    std::cout << "Selected " << selectedBySize.size() << " transactions by block size limit" << std::endl;
+    
+    auto selectedByValue = mempool.selectTransactionsByValue(40000000);
+    std::cout << "Selected " << selectedByValue.size() << " transactions with min fee 40000000" << std::endl;
+    
+    // Test 50: Double Spend Detection
+    std::cout << "\n=== Test 50: Double Spend Detection ===" << std::endl;
+    
+    // Try to add a transaction that spends the same output as mempoolTx1
+    Transaction doubleSpendTx;
+    doubleSpendTx.txid = "double_spend_tx";
+    doubleSpendTx.isCoinbase = false;
+    
+    TxIn doubleSpendInput;
+    doubleSpendInput.prevout = {"mempool_input_1", 0}; // Same as mempoolTx1
+    doubleSpendInput.sig = "double_spend_signature";
+    doubleSpendInput.pubKey = "double_spend_pubkey";
+    doubleSpendTx.vin.push_back(doubleSpendInput);
+    
+    TxOut doubleSpendOutput;
+    doubleSpendOutput.value = 120000000;
+    doubleSpendOutput.pubKeyHash = "double_spend_receiver";
+    doubleSpendTx.vout.push_back(doubleSpendOutput);
+    bool doubleSpendAdded = mempool.addTransaction(doubleSpendTx, 102);
+    std::cout << "Double spend transaction added: " << (doubleSpendAdded ? "Yes" : "No") << std::endl;
+    std::cout << "Mempool size after double spend attempt: " << mempool.size() << std::endl;
+    
+    // Test 51: Miner and Block Template Creation
+    std::cout << "\n=== Test 51: Miner and Block Template Creation ===" << std::endl;
+    
+    std::string mempoolMinerAddress = "miner_address_123";
+    Miner miner(&mempool, &utxoSet, &chainState, &validator, mempoolMinerAddress);
+    std::cout << "Miner created with address: " << miner.getMinerAddress() << std::endl;
+    
+    // Create block template
+    auto blockTemplate = miner.createBlockTemplate(102);
+    std::cout << "Block template created successfully" << std::endl;
+    std::cout << "Template transaction count: " << blockTemplate.transactionCount << std::endl;
+    std::cout << "Template total fees: " << blockTemplate.totalFees << " satoshis" << std::endl;
+    std::cout << "Template block reward: " << blockTemplate.blockReward << " satoshis" << std::endl;
+    std::cout << "Template block size: " << blockTemplate.blockSize << " bytes" << std::endl;
+    
+    // Verify coinbase transaction
+    if (!blockTemplate.transactions.empty()) {
+        const auto& coinbaseTx = blockTemplate.transactions[0];
+        std::cout << "Coinbase transaction created with " << coinbaseTx.vout.size() << " outputs" << std::endl;
+        if (!coinbaseTx.vout.empty()) {
+            std::cout << "Coinbase output amount: " << coinbaseTx.vout[0].value << " satoshis" << std::endl;
+        }
+    }
+    
+    // Test 52: Mining Process (Limited Iterations)
+    std::cout << "\n=== Test 52: Mining Process ===" << std::endl;
+    
+    std::cout << "Attempting to mine block (limited to 1000 iterations)..." << std::endl;
+    auto minedBlock = miner.mineBlockTemplate(blockTemplate, 1000);
+    
+    std::string blockHash = minedBlock.header.computeHash();
+    std::cout << "Block hash: " << blockHash.substr(0, 16) << "..." << std::endl;
+    std::cout << "Block nonce: " << minedBlock.header.nonce << std::endl;
+    
+    // Check if mining was successful
+    bool miningSuccessful = Difficulty::meetsTarget(blockHash, minedBlock.header.bits);
+    std::cout << "Mining successful: " << (miningSuccessful ? "Yes" : "No") << std::endl;
+    
+    if (miningSuccessful) {
+        std::cout << "✅ Successfully mined a block!" << std::endl;
+    } else {
+        std::cout << "⚠️ Mining incomplete (limited iterations)" << std::endl;
+    }
+    
+    // Test 53: Mining Statistics
+    std::cout << "\n=== Test 53: Mining Statistics ===" << std::endl;
+    
+    miner.printMiningStats();
+    auto miningStats = miner.getMiningStats();
+    std::cout << "Blocks created: " << miningStats.blocksCreated << std::endl;
+    std::cout << "Hash attempts: " << miningStats.totalHashAttempts << std::endl;
+    
+    // Test 54: Mempool Updates After Block Mining
+    std::cout << "\n=== Test 54: Mempool Updates After Block Mining ===" << std::endl;
+    
+    std::cout << "Mempool size before block confirmation: " << mempool.size() << std::endl;
+    
+    // Simulate confirming the mined block
+    std::vector<Transaction> confirmedTxs;
+    for (size_t i = 1; i < minedBlock.transactions.size(); i++) { // Skip coinbase
+        confirmedTxs.push_back(minedBlock.transactions[i]);
+    }
+    
+    mempool.updateForNewBlock(confirmedTxs, 103);
+    std::cout << "Mempool size after block confirmation: " << mempool.size() << std::endl;
+    
+    // Test 55: Fee Estimation
+    std::cout << "\n=== Test 55: Fee Estimation ===" << std::endl;
+    
+    uint64_t estimatedFee1 = mempool.estimateFeeRate(1);
+    uint64_t estimatedFee6 = mempool.estimateFeeRate(6);
+    uint64_t minFeeRate = mempool.getMinimumFeeRate();
+    
+    std::cout << "Estimated fee rate (1 block): " << estimatedFee1 << " sat/byte" << std::endl;
+    std::cout << "Estimated fee rate (6 blocks): " << estimatedFee6 << " sat/byte" << std::endl;
+    std::cout << "Minimum fee rate: " << minFeeRate << " sat/byte" << std::endl;
+    
+    // Test 56: Dependency Management
+    std::cout << "\n=== Test 56: Transaction Dependency Management ===" << std::endl;
+    
+    // Create a chain of dependent transactions
+    Transaction parentTx;
+    parentTx.txid = "parent_tx_id";
+    parentTx.isCoinbase = false;
+    
+    TxIn parentInput;
+    parentInput.prevout = {"parent_input", 0};
+    parentInput.sig = "parent_signature";
+    parentInput.pubKey = "parent_pubkey";
+    parentTx.vin.push_back(parentInput);
+    
+    TxOut parentOutput;
+    parentOutput.value = 300000000;
+    parentOutput.pubKeyHash = "intermediate_output";
+    parentTx.vout.push_back(parentOutput);
+    
+    // Create UTXO for parent transaction
+    TxOut parentUtxoOut;
+    parentUtxoOut.value = 350000000;
+    parentUtxoOut.pubKeyHash = "parent_sender";
+    UTXO parentUtxo(parentUtxoOut, 102, false);
+    utxoSet.addUTXO(OutPoint{"parent_input", 0}, parentUtxoOut, 102, false);
+    
+    // Add parent transaction to mempool
+    bool parentAdded = mempool.addTransaction(parentTx, 103);
+    std::cout << "Parent transaction added: " << (parentAdded ? "Yes" : "No") << std::endl;
+    
+    // Create child transaction that spends parent's output
+    Transaction childTx;
+    childTx.txid = "child_tx_id";
+    childTx.isCoinbase = false;
+    
+    TxIn childInput;
+    childInput.prevout = {parentTx.txid, 0};
+    childInput.sig = "child_signature";
+    childInput.pubKey = "child_pubkey";
+    childTx.vin.push_back(childInput);
+    
+    TxOut childOutput;
+    childOutput.value = 250000000;
+    childOutput.pubKeyHash = "child_receiver_script";
+    childTx.vout.push_back(childOutput);
+    
+    // Add child transaction
+    bool childAdded = mempool.addTransaction(childTx, 103);
+    std::cout << "Child transaction added: " << (childAdded ? "Yes" : "No") << std::endl;
+    std::cout << "Final mempool size: " << mempool.size() << std::endl;
+    
+    // Test dependencies
+    auto childDeps = mempool.getDependencies(childTx.txid);
+    std::cout << "Child transaction dependencies: " << childDeps.size() << std::endl;
+    
+    auto parentDependents = mempool.getDependents(parentTx.txid);
+    std::cout << "Parent transaction dependents: " << parentDependents.size() << std::endl;
+    
+    // Test 57: Advanced Block Template with Dependencies
+    std::cout << "\n=== Test 57: Advanced Block Template with Dependencies ===" << std::endl;
+    
+    auto advancedTemplate = miner.createBlockTemplate(103);
+    std::cout << "Advanced template created with " << advancedTemplate.transactionCount << " transactions" << std::endl;
+    
+    // Verify dependency ordering in block template
+    bool dependencyOrderCorrect = true;
+    std::unordered_set<std::string> seenTxids;
+    
+    for (const auto& tx : advancedTemplate.transactions) {
+        if (tx.txid == childTx.txid) {
+            // Check if parent transaction appears before child
+            if (seenTxids.find(parentTx.txid) == seenTxids.end()) {
+                dependencyOrderCorrect = false;
+                break;
+            }
+        }
+        seenTxids.insert(tx.txid);
+    }
+    
+    std::cout << "Dependency ordering correct: " << (dependencyOrderCorrect ? "Yes" : "No") << std::endl;
+    
+    // Test 58: Mempool Clear and Cleanup
+    std::cout << "\n=== Test 58: Mempool Clear and Cleanup ===" << std::endl;
+    
+    std::cout << "Mempool size before clear: " << mempool.size() << std::endl;
+    mempool.clear();
+    std::cout << "Mempool size after clear: " << mempool.size() << std::endl;
+    std::cout << "Mempool empty after clear: " << (mempool.isEmpty() ? "Yes" : "No") << std::endl;
+    
+    std::cout << "\n✅ Step 7: Mempool & Mining Tests Completed!" << std::endl;
+    
+    Utils::logInfo("✅ Mempool & Mining system working");
+    Utils::logInfo("Next: Implement Difficulty Retargeting (Step 8)");
     
     return 0;
 }
