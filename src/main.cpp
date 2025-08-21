@@ -1,6 +1,8 @@
 #include "core/validator.h"
 #include "core/mempool.h"
+#include "core/retargeting.h"
 #include <iostream>
+#include <iomanip>
 #include <chrono>
 #include "primitives/hash.h"
 #include "primitives/serialize.h"
@@ -1058,8 +1060,308 @@ int main() {
     
     std::cout << "\n✅ Step 7: Mempool & Mining Tests Completed!" << std::endl;
     
-    Utils::logInfo("✅ Mempool & Mining system working");
-    Utils::logInfo("Next: Implement Difficulty Retargeting (Step 8)");
+    // ========================================
+    // STEP 8: DIFFICULTY RETARGETING TESTS
+    // ========================================
+    Utils::logInfo("\n🔄 STEP 8: DIFFICULTY RETARGETING TESTS");
+    
+    // Test 59: Basic DifficultyRetargeting initialization
+    Utils::logInfo("\n📊 Test 59: Basic DifficultyRetargeting Initialization");
+    DifficultyRetargeting retargeting(DifficultyRetargeting::Algorithm::BASIC);
+    std::cout << "Retargeting system created" << std::endl;
+    std::cout << "Algorithm: " << retargeting.algorithmToString(retargeting.getAlgorithm()) << std::endl;
+    std::cout << "History size: " << retargeting.getHistorySize() << std::endl;
+    
+    // Test 60: Adding blocks to retargeting system
+    Utils::logInfo("\n📊 Test 60: Adding Blocks to Retargeting System");
+    uint64_t baseTime = Utils::getCurrentTimestamp();
+    uint32_t baseBits = 0x1d00ffff; // Standard difficulty
+    
+    // Create a series of blocks with varying timestamps
+    std::vector<Block> testBlocks;
+    std::vector<uint32_t> testHeights;
+    
+    for (int i = 0; i < 15; ++i) {
+        Block testBlock;
+        testBlock.header.timestamp = baseTime + i * 30; // 30-second intervals initially
+        testBlock.header.bits = baseBits;
+        testBlock.hash = "block_" + std::to_string(i);
+        
+        testBlocks.push_back(testBlock);
+        testHeights.push_back(i);
+        retargeting.addBlock(testBlock, i);
+    }
+    
+    std::cout << "Added " << testBlocks.size() << " blocks to retargeting system" << std::endl;
+    std::cout << "Final history size: " << retargeting.getHistorySize() << std::endl;
+    
+    // Test 61: Chain analysis
+    Utils::logInfo("\n📊 Test 61: Chain Analysis");
+    DifficultyRetargeting::ChainAnalysis analysis = retargeting.analyzeChain();
+    std::cout << "Average block time: " << analysis.avgBlockTime << " seconds" << std::endl;
+    std::cout << "Current hashrate (relative): " << std::fixed << std::setprecision(2) 
+              << analysis.currentHashrate << std::endl;
+    std::cout << "Hashrate change: " << analysis.hashrateChange << "x" << std::endl;
+    std::cout << "Difficulty trend: " << analysis.difficultyTrend << "x" << std::endl;
+    std::cout << "Blocks to retarget: " << analysis.blocksToRetarget << std::endl;
+    std::cout << "Chain is stable: " << (analysis.isStable ? "Yes" : "No") << std::endl;
+    
+    // Test 62: Basic retargeting (no adjustment needed yet)
+    Utils::logInfo("\n📊 Test 62: Basic Retargeting Test");
+    DifficultyRetargeting::RetargetResult result = retargeting.calculateRetarget(5);
+    retargeting.printRetargetResult(result);
+    
+    // Test 63: Retargeting at adjustment interval
+    Utils::logInfo("\n📊 Test 63: Retargeting at Adjustment Interval");
+    DifficultyRetargeting::RetargetResult retargetResult = retargeting.calculateRetarget(10);
+    retargeting.printRetargetResult(retargetResult);
+    
+    // Test 64: Simulating fast blocks (need difficulty increase)
+    Utils::logInfo("\n📊 Test 64: Simulating Fast Blocks");
+    DifficultyRetargeting fastRetargeting(DifficultyRetargeting::Algorithm::BASIC);
+    
+    for (int i = 0; i < 12; ++i) {
+        Block fastBlock;
+        fastBlock.header.timestamp = baseTime + i * 15; // 15-second intervals (too fast)
+        fastBlock.header.bits = baseBits;
+        fastBlock.hash = "fast_block_" + std::to_string(i);
+        fastRetargeting.addBlock(fastBlock, i);
+    }
+    
+    DifficultyRetargeting::RetargetResult fastResult = fastRetargeting.calculateRetarget(10);
+    std::cout << "\nFast blocks retarget result:" << std::endl;
+    fastRetargeting.printRetargetResult(fastResult);
+    
+    // Test 65: Simulating slow blocks (need difficulty decrease)
+    Utils::logInfo("\n📊 Test 65: Simulating Slow Blocks");
+    DifficultyRetargeting slowRetargeting(DifficultyRetargeting::Algorithm::BASIC);
+    
+    for (int i = 0; i < 12; ++i) {
+        Block slowBlock;
+        slowBlock.header.timestamp = baseTime + i * 60; // 60-second intervals (too slow)
+        slowBlock.header.bits = baseBits;
+        slowBlock.hash = "slow_block_" + std::to_string(i);
+        slowRetargeting.addBlock(slowBlock, i);
+    }
+    
+    DifficultyRetargeting::RetargetResult slowResult = slowRetargeting.calculateRetarget(10);
+    std::cout << "\nSlow blocks retarget result:" << std::endl;
+    slowRetargeting.printRetargetResult(slowResult);
+    
+    // Test 66: Linear algorithm testing
+    Utils::logInfo("\n📊 Test 66: Linear Algorithm Testing");
+    DifficultyRetargeting linearRetargeting(DifficultyRetargeting::Algorithm::LINEAR);
+    
+    // Add blocks with variable timing
+    for (int i = 0; i < 12; ++i) {
+        Block block;
+        // Create irregular timing pattern
+        uint64_t timeVariation = (i % 3 == 0) ? 45 : (i % 3 == 1) ? 20 : 35;
+        block.header.timestamp = baseTime + i * timeVariation;
+        block.header.bits = baseBits;
+        block.hash = "linear_block_" + std::to_string(i);
+        linearRetargeting.addBlock(block, i);
+    }
+    
+    DifficultyRetargeting::RetargetResult linearResult = linearRetargeting.calculateRetarget(10);
+    std::cout << "\nLinear algorithm result:" << std::endl;
+    linearRetargeting.printRetargetResult(linearResult);
+    
+    // Test 67: EMA algorithm testing
+    Utils::logInfo("\n📊 Test 67: EMA Algorithm Testing");
+    DifficultyRetargeting emaRetargeting(DifficultyRetargeting::Algorithm::EMA);
+    
+    // Add blocks with trending timing (getting faster)
+    for (int i = 0; i < 12; ++i) {
+        Block block;
+        uint64_t blockTime = 40 - (i * 2); // Gradually decreasing block times
+        block.header.timestamp = baseTime + i * blockTime;
+        block.header.bits = baseBits;
+        block.hash = "ema_block_" + std::to_string(i);
+        emaRetargeting.addBlock(block, i);
+    }
+    
+    DifficultyRetargeting::RetargetResult emaResult = emaRetargeting.calculateRetarget(10);
+    std::cout << "\nEMA algorithm result:" << std::endl;
+    emaRetargeting.printRetargetResult(emaResult);
+    
+    // Test 68: Adaptive algorithm testing
+    Utils::logInfo("\n📊 Test 68: Adaptive Algorithm Testing");
+    DifficultyRetargeting adaptiveRetargeting(DifficultyRetargeting::Algorithm::ADAPTIVE);
+    
+    // Add blocks with high volatility
+    for (int i = 0; i < 12; ++i) {
+        Block block;
+        uint64_t blockTime = (i % 2 == 0) ? 10 : 50; // High volatility
+        block.header.timestamp = baseTime + i * blockTime;
+        block.header.bits = baseBits;
+        block.hash = "adaptive_block_" + std::to_string(i);
+        adaptiveRetargeting.addBlock(block, i);
+    }
+    
+    DifficultyRetargeting::RetargetResult adaptiveResult = adaptiveRetargeting.calculateRetarget(10);
+    std::cout << "\nAdaptive algorithm result:" << std::endl;
+    adaptiveRetargeting.printRetargetResult(adaptiveResult);
+    
+    // Test 69: Algorithm comparison
+    Utils::logInfo("\n📊 Test 69: Algorithm Comparison");
+    std::vector<Block> comparisonBlocks;
+    std::vector<uint32_t> comparisonHeights;
+    
+    // Create consistent test data
+    for (int i = 0; i < 15; ++i) {
+        Block block;
+        // Simulate mining getting 50% faster over time
+        uint64_t timeReduction = i * 1; // Gradual speedup
+        block.header.timestamp = baseTime + i * (30 - timeReduction);
+        block.header.bits = baseBits;
+        block.hash = "comparison_block_" + std::to_string(i);
+        comparisonBlocks.push_back(block);
+        comparisonHeights.push_back(i);
+    }
+    
+    // Test all algorithms on same data
+    std::vector<DifficultyRetargeting::Algorithm> algorithms = {
+        DifficultyRetargeting::Algorithm::BASIC,
+        DifficultyRetargeting::Algorithm::LINEAR,
+        DifficultyRetargeting::Algorithm::EMA,
+        DifficultyRetargeting::Algorithm::ADAPTIVE
+    };
+    
+    for (auto algo : algorithms) {
+        DifficultyRetargeting compRetargeting(algo);
+        for (size_t i = 0; i < comparisonBlocks.size(); ++i) {
+            compRetargeting.addBlock(comparisonBlocks[i], comparisonHeights[i]);
+        }
+        
+        DifficultyRetargeting::RetargetResult compResult = compRetargeting.calculateRetarget(10);
+        std::cout << "\n" << compRetargeting.algorithmToString(algo) << " algorithm:" << std::endl;
+        std::cout << "  New bits: 0x" << std::hex << compResult.newBits << std::dec << std::endl;
+        std::cout << "  Difficulty change: " << std::fixed << std::setprecision(4) 
+                  << compResult.difficultyChange << "x" << std::endl;
+    }
+    
+    // Test 70: Retargeting statistics
+    Utils::logInfo("\n📊 Test 70: Retargeting Statistics");
+    DifficultyRetargeting statsRetargeting(DifficultyRetargeting::Algorithm::BASIC);
+    
+    // Simulate a longer chain with multiple retargets
+    uint32_t currentBits = baseBits;
+    for (int i = 0; i < 25; ++i) {
+        Block block;
+        
+        // Simulate network hashrate changes
+        uint64_t blockTime;
+        if (i < 10) {
+            blockTime = 30; // Normal timing
+        } else if (i < 20) {
+            blockTime = 20; // Faster (more miners)
+            if (i % 10 == 0) currentBits -= 0x1000; // Increase difficulty
+        } else {
+            blockTime = 45; // Slower (miners leaving)
+            if (i % 10 == 0) currentBits += 0x1000; // Decrease difficulty
+        }
+        
+        block.header.timestamp = baseTime + i * blockTime;
+        block.header.bits = currentBits;
+        block.hash = "stats_block_" + std::to_string(i);
+        statsRetargeting.addBlock(block, i);
+    }
+    
+    DifficultyRetargeting::RetargetStats retargetStats = statsRetargeting.getRetargetStats();
+    std::cout << "\nRetargeting Statistics:" << std::endl;
+    std::cout << "Total retargets: " << retargetStats.totalRetargets << std::endl;
+    std::cout << "Upward adjustments: " << retargetStats.upwardAdjustments << std::endl;
+    std::cout << "Downward adjustments: " << retargetStats.downwardAdjustments << std::endl;
+    std::cout << "Average adjustment size: " << std::fixed << std::setprecision(4) 
+              << retargetStats.avgAdjustmentSize << std::endl;
+    std::cout << "Max adjustment size: " << retargetStats.maxAdjustmentSize << std::endl;
+    std::cout << "Average block time: " << retargetStats.avgBlockTime << " seconds" << std::endl;
+    std::cout << "Target accuracy: " << std::setprecision(2) << (retargetStats.targetAccuracy * 100) << "%" << std::endl;
+    
+    // Test 71: Integration with enhanced difficulty system
+    Utils::logInfo("\n📊 Test 71: Enhanced Difficulty System Integration");
+    
+    // Test the enhanced difficulty functions
+    std::vector<uint64_t> testTimes = {
+        baseTime, baseTime + 25, baseTime + 50, baseTime + 80, baseTime + 105,
+        baseTime + 125, baseTime + 160, baseTime + 185, baseTime + 210, baseTime + 240
+    };
+    
+    std::vector<uint32_t> testBits = {
+        baseBits, baseBits, baseBits, baseBits, baseBits,
+        baseBits, baseBits, baseBits, baseBits, baseBits
+    };
+    
+    uint32_t nextRequired = Difficulty::calculateNextWorkRequired(testTimes, testBits, 10);
+    std::cout << "Enhanced difficulty calculation:" << std::endl;
+    std::cout << "  Original bits: 0x" << std::hex << baseBits << std::dec << std::endl;
+    std::cout << "  Next required: 0x" << std::hex << nextRequired << std::dec << std::endl;
+    
+    // Test timespan clamping
+    uint64_t retargetTimespan = 300; // 5 minutes
+    uint64_t extremeFast = 30;       // 30 seconds (10x too fast)
+    uint64_t extremeSlow = 3000;     // 50 minutes (10x too slow)
+    
+    uint64_t clampedFast = Difficulty::clampTimespan(extremeFast, retargetTimespan);
+    uint64_t clampedSlow = Difficulty::clampTimespan(extremeSlow, retargetTimespan);
+    
+    std::cout << "\nTimespan clamping test:" << std::endl;
+    std::cout << "  Target timespan: " << retargetTimespan << "s" << std::endl;
+    std::cout << "  Extreme fast (" << extremeFast << "s) clamped to: " << clampedFast << "s" << std::endl;
+    std::cout << "  Extreme slow (" << extremeSlow << "s) clamped to: " << clampedSlow << "s" << std::endl;
+    
+    // Test hashrate change calculation
+    std::vector<uint64_t> hashrateTestTimes = {
+        baseTime, baseTime + 30, baseTime + 60, baseTime + 90, baseTime + 120,
+        baseTime + 140, baseTime + 160, baseTime + 175, baseTime + 190, baseTime + 200 // Getting faster
+    };
+    
+    double hashrateChange = Difficulty::calculateHashrateChange(hashrateTestTimes);
+    std::cout << "\nHashrate change calculation: " << std::fixed << std::setprecision(2) 
+              << hashrateChange << "x" << std::endl;
+    
+    // Test 72: Safety limits and validation
+    Utils::logInfo("\n📊 Test 72: Safety Limits and Validation");
+    DifficultyRetargeting safetyRetargeting(DifficultyRetargeting::Algorithm::BASIC);
+    
+    // Test extreme adjustment scenarios
+    uint32_t testOldBits = 0x1d00ffff;
+    uint32_t testNewBits1 = 0x1e00ffff; // Much easier
+    uint32_t testNewBits2 = 0x1c00ffff; // Much harder
+    uint32_t testNewBits3 = 0;          // Invalid
+    uint32_t testNewBits4 = 0xffffffff; // Too high
+    
+    std::cout << "Safety validation tests:" << std::endl;
+    std::cout << "  Original bits: 0x" << std::hex << testOldBits << std::dec << std::endl;
+    
+    // Test valid adjustments
+    bool valid1 = safetyRetargeting.isValidAdjustment(testOldBits, testNewBits1);
+    bool valid2 = safetyRetargeting.isValidAdjustment(testOldBits, testNewBits2);
+    bool valid3 = safetyRetargeting.isValidAdjustment(testOldBits, testNewBits3);
+    bool valid4 = safetyRetargeting.isValidAdjustment(testOldBits, testNewBits4);
+    
+    std::cout << "  Easier adjustment (0x" << std::hex << testNewBits1 << std::dec << ") valid: " 
+              << (valid1 ? "Yes" : "No") << std::endl;
+    std::cout << "  Harder adjustment (0x" << std::hex << testNewBits2 << std::dec << ") valid: " 
+              << (valid2 ? "Yes" : "No") << std::endl;
+    std::cout << "  Zero bits valid: " << (valid3 ? "Yes" : "No") << std::endl;
+    std::cout << "  Max bits valid: " << (valid4 ? "Yes" : "No") << std::endl;
+    
+    // Test safety limit application
+    uint32_t safe1 = safetyRetargeting.applySafetyLimits(testOldBits, testNewBits1);
+    uint32_t safe2 = safetyRetargeting.applySafetyLimits(testOldBits, testNewBits2);
+    uint32_t safe3 = safetyRetargeting.applySafetyLimits(testOldBits, testNewBits3);
+    
+    std::cout << "\nSafety limit application:" << std::endl;
+    std::cout << "  Input: 0x" << std::hex << testNewBits1 << " -> Output: 0x" << safe1 << std::dec << std::endl;
+    std::cout << "  Input: 0x" << std::hex << testNewBits2 << " -> Output: 0x" << safe2 << std::dec << std::endl;
+    std::cout << "  Input: 0x" << std::hex << testNewBits3 << " -> Output: 0x" << safe3 << std::dec << std::endl;
+    
+    std::cout << "\n✅ Step 8: Difficulty Retargeting Tests Completed!" << std::endl;
+    
+    Utils::logInfo("✅ Difficulty Retargeting system working");
+    Utils::logInfo("Next: Implement P2P Networking (Step 9)");
     
     return 0;
 }

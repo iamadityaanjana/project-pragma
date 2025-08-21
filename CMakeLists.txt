@@ -23,6 +23,7 @@ set(SOURCES
     src/core/utxo.cpp
     src/core/validator.cpp
     src/core/mempool.cpp
+    src/core/retargeting.cpp
 )
 
 # Headers
@@ -38,6 +39,7 @@ set(HEADERS
     src/core/utxo.h
     src/core/validator.h
     src/core/mempool.h
+    src/core/retargeting.h
 )
 
 # Main executable
