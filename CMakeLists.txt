@@ -25,6 +25,9 @@ set(SOURCES
     src/core/mempool.cpp
     src/core/retargeting.cpp
 )
+        src/network/protocol.cpp
+        src/network/peer.cpp
+        src/network/p2p.cpp
 
 # Headers
 set(HEADERS
@@ -41,6 +44,9 @@ set(HEADERS
     src/core/mempool.h
     src/core/retargeting.h
 )
+        src/network/protocol.h
+        src/network/peer.h
+        src/network/p2p.h
 
 # Main executable
 add_executable(pragma-node src/main.cpp ${SOURCES})
