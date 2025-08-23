@@ -1423,17 +1423,29 @@ int main() {
     Utils::logInfo("\n77. Testing Peer Management:");
     
     PeerManager peerManager;
+    std::cout << "PeerManager created successfully" << std::endl;
     
     // Add some peers
     NetworkAddress addr1("192.168.1.100", 8333);
     NetworkAddress addr2("192.168.1.101", 8333);
     NetworkAddress addr3("10.0.0.50", 8333);
+    std::cout << "Network addresses created" << std::endl;
     
+    std::cout << "Adding peer 1..." << std::endl;
     peerManager.addPeer(addr1);
-    peerManager.addPeer(addr2);
-    peerManager.addPeer(addr3);
+    std::cout << "Added peer 1" << std::endl;
     
+    std::cout << "Adding peer 2..." << std::endl;
+    peerManager.addPeer(addr2);
+    std::cout << "Added peer 2" << std::endl;
+    
+    std::cout << "Adding peer 3..." << std::endl;
+    peerManager.addPeer(addr3);
+    std::cout << "Added peer 3" << std::endl;
+    
+    std::cout << "Getting stats..." << std::endl;
     auto peerStats = peerManager.getStats();
+    std::cout << "Got stats successfully" << std::endl;
     std::cout << "Total peers: " << peerStats.totalPeers << std::endl;
     std::cout << "Connected peers: " << peerStats.connectedPeers << std::endl;
     

@@ -11,11 +11,21 @@ pragma::P2PTestNode::P2PTestNode(uint16_t port, const std::string& nodeId)
     
     // Create a UTXO set and validator for mempool
     auto utxoSet = new UTXOSet();  // Will be managed by mempool
-    auto validator = new BlockValidator(chainState.get(), utxoSet);
+    auto validator = new BlockValidator(utxoSet, chainState.get());
     mempool = std::make_unique<Mempool>(utxoSet, validator);
     
-    // Initialize P2P network
-    p2pNetwork = std::make_unique<P2PNetwork>(port, chainState.get(), mempool.get());
+    // Initialize P2P network with proper NetworkConfig
+    NetworkConfig config;
+    config.port = port;
+    config.listen = true;
+    config.maxConnections = 8;
+    config.maxInbound = 4;
+    config.maxOutbound = 4;
+    config.connectTimeout = std::chrono::seconds(10);
+    config.handshakeTimeout = std::chrono::seconds(15);
+    config.userAgent = "/PragmaTest:1.0.0/";
+    
+    p2pNetwork = std::make_unique<P2PNetwork>(config, chainState.get(), mempool.get());
 }
 
 pragma::P2PTestNode::~P2PTestNode() {

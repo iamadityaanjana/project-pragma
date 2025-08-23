@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
+#include <atomic>
 #include <functional>
 #include <atomic>
 #include <mutex>
@@ -58,7 +59,7 @@ class Peer {
 private:
     std::string id;
     NetworkAddress address;
-    PeerState state;
+    std::atomic<PeerState> state;
     PeerStats stats;
     
     // Protocol information
@@ -99,8 +100,12 @@ public:
     // Basic getters
     const std::string& getId() const { return id; }
     const NetworkAddress& getAddress() const { return address; }
-    PeerState getState() const { std::lock_guard<std::mutex> lock(peerMutex); return state; }
-    const PeerStats& getStats() const { std::lock_guard<std::mutex> lock(peerMutex); return stats; }
+    PeerState getState() const { return state.load(); }
+    // Get peer statistics (return by value to avoid mutex issues)
+    PeerStats getStats() const { 
+        std::lock_guard<std::mutex> lock(peerMutex); 
+        return stats; 
+    }
     
     // Protocol information
     uint32_t getVersion() const { return version; }
@@ -267,6 +272,11 @@ public:
     void printPeerStatus() const;
     std::vector<std::string> getPeerIds() const;
     std::string getManagerStatus() const;
+    
+private:
+    // Internal helper methods (don't acquire locks)
+    bool isBannedNoLock(const NetworkAddress& address) const;
+    std::shared_ptr<Peer> getPeerNoLock(const std::string& peerId);
 };
 
 /**

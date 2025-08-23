@@ -21,29 +21,28 @@ Peer::Peer(const std::string& peerId, const NetworkAddress& addr)
 }
 
 void Peer::setState(PeerState newState) {
-    std::lock_guard<std::mutex> lock(peerMutex);
-    state = newState;
+    state.store(newState);
     updateLastSeen();
 }
 
 bool Peer::isConnected() const {
-    std::lock_guard<std::mutex> lock(peerMutex);
-    return state != PeerState::DISCONNECTED && state != PeerState::BANNED;
+    PeerState currentState = state.load();
+    return currentState != PeerState::DISCONNECTED && currentState != PeerState::BANNED;
 }
 
 bool Peer::isHandshakeComplete() const {
-    std::lock_guard<std::mutex> lock(peerMutex);
-    return state == PeerState::HANDSHAKE_COMPLETE || state == PeerState::SYNCING || state == PeerState::READY;
+    PeerState currentState = state.load();
+    return currentState == PeerState::HANDSHAKE_COMPLETE || currentState == PeerState::SYNCING || currentState == PeerState::READY;
 }
 
 bool Peer::isReady() const {
-    std::lock_guard<std::mutex> lock(peerMutex);
-    return state == PeerState::READY;
+    PeerState currentState = state.load();
+    return currentState == PeerState::READY;
 }
 
 bool Peer::isBanned() const {
-    std::lock_guard<std::mutex> lock(peerMutex);
-    return state == PeerState::BANNED;
+    PeerState currentState = state.load();
+    return currentState == PeerState::BANNED;
 }
 
 void Peer::setVersionInfo(const VersionMessage& versionMsg) {
@@ -229,7 +228,7 @@ std::string Peer::toString() const {
     std::lock_guard<std::mutex> lock(peerMutex);
     std::stringstream ss;
     ss << "Peer[" << id << "] " << address.toString() 
-       << " State: " << static_cast<int>(state)
+       << " State: " << static_cast<int>(state.load())
        << " Version: " << version
        << " Height: " << startHeight
        << " Latency: " << std::fixed << std::setprecision(1) << stats.latency << "ms";
@@ -263,7 +262,7 @@ std::shared_ptr<Peer> PeerManager::addPeer(const NetworkAddress& address, bool i
     auto addressStr = address.toString();
     auto it = addressToPeerId.find(addressStr);
     if (it != addressToPeerId.end()) {
-        return getPeer(it->second);
+        return getPeerNoLock(it->second);
     }
     
     // Check connection limits
@@ -276,7 +275,7 @@ std::shared_ptr<Peer> PeerManager::addPeer(const NetworkAddress& address, bool i
     }
     
     // Check if banned
-    if (isBanned(address)) {
+    if (isBannedNoLock(address)) {
         return nullptr;
     }
     
@@ -339,6 +338,10 @@ void PeerManager::banPeer(const std::string& peerId, const std::string& reason) 
 
 bool PeerManager::isBanned(const NetworkAddress& address) const {
     std::lock_guard<std::mutex> lock(managerMutex);
+    return isBannedNoLock(address);
+}
+
+bool PeerManager::isBannedNoLock(const NetworkAddress& address) const {
     auto it = bannedPeers.find(address.toString());
     if (it == bannedPeers.end()) {
         return false;
@@ -351,6 +354,10 @@ bool PeerManager::isBanned(const NetworkAddress& address) const {
 
 std::shared_ptr<Peer> PeerManager::getPeer(const std::string& peerId) {
     std::lock_guard<std::mutex> lock(managerMutex);
+    return getPeerNoLock(peerId);
+}
+
+std::shared_ptr<Peer> PeerManager::getPeerNoLock(const std::string& peerId) {
     auto it = peers.find(peerId);
     return (it != peers.end()) ? it->second : nullptr;
 }
@@ -359,7 +366,7 @@ std::shared_ptr<Peer> PeerManager::getPeerByAddress(const NetworkAddress& addres
     std::lock_guard<std::mutex> lock(managerMutex);
     auto it = addressToPeerId.find(address.toString());
     if (it != addressToPeerId.end()) {
-        return getPeer(it->second);
+        return getPeerNoLock(it->second);
     }
     return nullptr;
 }
