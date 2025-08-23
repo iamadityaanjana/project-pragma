@@ -15,8 +15,8 @@
 namespace pragma {
 
 // Forward declarations
-class Block;
-class Transaction;
+struct Block;
+struct Transaction;
 
 /**
  * Peer connection state

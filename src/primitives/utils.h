@@ -28,6 +28,9 @@ public:
     
     // Random utilities
     static std::vector<uint8_t> randomBytes(size_t length);
+    
+    // Checksum utilities
+    static uint32_t calculateChecksum(const std::vector<uint8_t>& data);
     static uint32_t randomUint32();
     static uint64_t randomUint64();
     

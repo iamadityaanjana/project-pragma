@@ -3,17 +3,14 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <variant>
 #include <memory>
-#include <chrono>
-#include <functional>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace pragma {
 
 // Forward declarations
-class Block;
-class Transaction;
+struct Transaction;
+struct Block;
 
 /**
  * P2P Message types
@@ -21,15 +18,15 @@ class Transaction;
 enum class MessageType : uint32_t {
     VERSION = 1,
     VERACK = 2,
-    PING = 3,
-    PONG = 4,
-    INV = 5,
-    GETDATA = 6,
-    GETBLOCKS = 7,
-    GETHEADERS = 8,
+    GETHEADERS = 3,
+    HEADERS = 4,
+    GETDATA = 5,
+    INV = 6,
+    PING = 7,
+    PONG = 8,
     TX = 9,
     BLOCK = 10,
-    HEADERS = 11,
+    HEADERS_NEW = 11,
     ADDR = 12,
     GETADDR = 13,
     REJECT = 14,
@@ -49,7 +46,7 @@ enum class InventoryType : uint32_t {
 };
 
 /**
- * Inventory vector entry
+ * Inventory vector for referencing objects
  */
 struct InventoryVector {
     InventoryType type;
@@ -58,8 +55,8 @@ struct InventoryVector {
     InventoryVector() = default;
     InventoryVector(InventoryType t, const std::string& h) : type(t), hash(h) {}
     
-    std::string serialize() const;
-    static InventoryVector deserialize(const std::string& data, size_t& offset);
+    std::vector<uint8_t> serialize() const;
+    static InventoryVector deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
@@ -75,8 +72,8 @@ struct NetworkAddress {
     NetworkAddress(const std::string& addr, uint16_t p, uint64_t serv = 1)
         : services(serv), ip(addr), port(p), timestamp(0) {}
     
-    std::string serialize() const;
-    static NetworkAddress deserialize(const std::string& data, size_t& offset);
+    std::vector<uint8_t> serialize() const;
+    static NetworkAddress deserialize(const std::vector<uint8_t>& data, size_t& offset);
     std::string toString() const;
 };
 
@@ -89,16 +86,16 @@ struct MessageHeader {
     uint32_t length;
     uint32_t checksum;
     
-    static const uint32_t MAGIC_MAIN = 0xD9B4BEF9;
-    static const uint32_t HEADER_SIZE = 24;
+    MessageHeader() = default;
+    MessageHeader(uint32_t m, MessageType cmd, uint32_t len = 0, uint32_t cs = 0)
+        : magic(m), command(cmd), length(len), checksum(cs) {}
     
-    std::string serialize() const;
-    static MessageHeader deserialize(const std::string& data);
-    bool isValid() const;
+    std::vector<uint8_t> serialize() const;
+    static MessageHeader deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * Version message payload
+ * Version message for protocol negotiation
  */
 struct VersionMessage {
     uint32_t version;
@@ -111,159 +108,228 @@ struct VersionMessage {
     uint32_t startHeight;
     bool relay;
     
-    static const uint32_t PROTOCOL_VERSION = 70015;
+    VersionMessage() = default;
     
-    std::string serialize() const;
-    static VersionMessage deserialize(const std::string& data);
+    std::vector<uint8_t> serialize() const;
+    static VersionMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * Ping/Pong message payload
+ * Ping/Pong message for keep-alive
  */
-struct PingPongMessage {
+struct PingMessage {
     uint64_t nonce;
     
-    std::string serialize() const;
-    static PingPongMessage deserialize(const std::string& data);
+    PingMessage() = default;
+    PingMessage(uint64_t n) : nonce(n) {}
+    
+    std::vector<uint8_t> serialize() const;
+    static PingMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
+};
+
+struct PongMessage {
+    uint64_t nonce;
+    
+    PongMessage() = default;
+    PongMessage(uint64_t n) : nonce(n) {}
+    
+    std::vector<uint8_t> serialize() const;
+    static PongMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * INV message payload
+ * Inventory message
  */
 struct InvMessage {
     std::vector<InventoryVector> inventory;
     
-    std::string serialize() const;
-    static InvMessage deserialize(const std::string& data);
+    InvMessage() = default;
+    
+    std::vector<uint8_t> serialize() const;
+    static InvMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * GetData message payload (same structure as INV)
+ * GetData message
  */
-using GetDataMessage = InvMessage;
+struct GetDataMessage {
+    std::vector<InventoryVector> inventory;
+    
+    GetDataMessage() = default;
+    
+    std::vector<uint8_t> serialize() const;
+    static GetDataMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
+};
 
 /**
- * GetHeaders message payload
+ * Transaction message
+ */
+struct TxMessage {
+    std::shared_ptr<Transaction> transaction;
+    
+    TxMessage() = default;
+    
+    std::vector<uint8_t> serialize() const;
+    static TxMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
+};
+
+/**
+ * Block message
+ */
+struct BlockMessage {
+    std::shared_ptr<Block> block;
+    
+    BlockMessage() = default;
+    
+    std::vector<uint8_t> serialize() const;
+    static BlockMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
+};
+
+/**
+ * GetHeaders message
  */
 struct GetHeadersMessage {
     uint32_t version;
     std::vector<std::string> locatorHashes;
-    std::string hashStop;
+    std::string stopHash;
     
-    std::string serialize() const;
-    static GetHeadersMessage deserialize(const std::string& data);
+    GetHeadersMessage() = default;
+    
+    std::vector<uint8_t> serialize() const;
+    static GetHeadersMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * Headers message payload
+ * Headers message
  */
 struct HeadersMessage {
-    std::vector<std::string> headers; // Serialized block headers
+    std::vector<std::shared_ptr<Block>> headers;
     
-    std::string serialize() const;
-    static HeadersMessage deserialize(const std::string& data);
+    HeadersMessage() = default;
+    
+    std::vector<uint8_t> serialize() const;
+    static HeadersMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * Addr message payload
+ * Addr message for peer address sharing
  */
 struct AddrMessage {
     std::vector<NetworkAddress> addresses;
     
-    std::string serialize() const;
-    static AddrMessage deserialize(const std::string& data);
+    AddrMessage() = default;
+    
+    std::vector<uint8_t> serialize() const;
+    static AddrMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * Reject message payload
+ * Reject message for protocol violations
  */
 struct RejectMessage {
     std::string message;
     uint8_t code;
     std::string reason;
-    std::string data;
+    std::vector<uint8_t> data;
     
-    enum RejectCode : uint8_t {
-        MALFORMED = 0x01,
-        INVALID = 0x10,
-        OBSOLETE = 0x11,
-        DUPLICATE = 0x12,
-        NONSTANDARD = 0x40,
-        DUST = 0x41,
-        INSUFFICIENTFEE = 0x42,
-        CHECKPOINT = 0x43
-    };
+    RejectMessage() = default;
     
-    std::string serialize() const;
-    static RejectMessage deserialize(const std::string& data);
+    std::vector<uint8_t> serialize() const;
+    static RejectMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
 };
 
 /**
- * Generic P2P message container
+ * Main P2P message container
  */
-class P2PMessage {
-public:
+struct P2PMessage {
     MessageHeader header;
-    std::string payload;
+    std::variant<
+        VersionMessage,
+        std::monostate,  // For VERACK (no payload)
+        InvMessage,
+        GetDataMessage,
+        TxMessage,
+        BlockMessage,
+        GetHeadersMessage,
+        HeadersMessage,
+        PingMessage,
+        PongMessage,
+        AddrMessage,
+        RejectMessage
+    > data;
     
     P2PMessage() = default;
-    P2PMessage(MessageType type, const std::string& data);
     
-    std::string serialize() const;
-    static std::shared_ptr<P2PMessage> deserialize(const std::string& data);
+    std::vector<uint8_t> serialize() const;
+    static P2PMessage deserialize(const std::vector<uint8_t>& data, size_t& offset);
     
-    bool isValid() const;
-    uint32_t calculateChecksum(const std::string& data) const;
-    
-    // Helper methods for specific message types
-    VersionMessage getVersionMessage() const;
-    PingPongMessage getPingPongMessage() const;
-    InvMessage getInvMessage() const;
-    GetDataMessage getGetDataMessage() const;
-    GetHeadersMessage getGetHeadersMessage() const;
-    HeadersMessage getHeadersMessage() const;
-    AddrMessage getAddrMessage() const;
-    RejectMessage getRejectMessage() const;
-    
-    // Factory methods
+    // Factory methods for creating specific message types
     static std::shared_ptr<P2PMessage> createVersion(const VersionMessage& version);
-    static std::shared_ptr<P2PMessage> createVerAck();
-    static std::shared_ptr<P2PMessage> createPing(uint64_t nonce);
-    static std::shared_ptr<P2PMessage> createPong(uint64_t nonce);
+    static std::shared_ptr<P2PMessage> createVerack();
     static std::shared_ptr<P2PMessage> createInv(const std::vector<InventoryVector>& inv);
     static std::shared_ptr<P2PMessage> createGetData(const std::vector<InventoryVector>& inv);
+    static std::shared_ptr<P2PMessage> createTx(std::shared_ptr<Transaction> tx);
+    static std::shared_ptr<P2PMessage> createBlock(std::shared_ptr<Block> block);
     static std::shared_ptr<P2PMessage> createGetHeaders(const GetHeadersMessage& getHeaders);
-    static std::shared_ptr<P2PMessage> createHeaders(const std::vector<std::string>& headers);
-    static std::shared_ptr<P2PMessage> createTx(const Transaction& tx);
-    static std::shared_ptr<P2PMessage> createBlock(const Block& block);
+    static std::shared_ptr<P2PMessage> createHeaders(const std::vector<std::shared_ptr<Block>>& headers);
+    static std::shared_ptr<P2PMessage> createPing(uint64_t nonce);
+    static std::shared_ptr<P2PMessage> createPong(uint64_t nonce);
     static std::shared_ptr<P2PMessage> createAddr(const std::vector<NetworkAddress>& addresses);
     static std::shared_ptr<P2PMessage> createReject(const RejectMessage& reject);
+    
+    // Message type checking
+    bool isVersion() const;
+    bool isVerack() const;
+    bool isInv() const;
+    bool isGetData() const;
+    bool isTx() const;
+    bool isBlock() const;
+    bool isGetHeaders() const;
+    bool isHeaders() const;
+    bool isPing() const;
+    bool isPong() const;
+    bool isAddr() const;
+    bool isReject() const;
+    
+    // Payload extraction (with type safety)
+    const VersionMessage* getVersion() const;
+    const InvMessage* getInv() const;
+    const GetDataMessage* getGetData() const;
+    const TxMessage* getTx() const;
+    const BlockMessage* getBlock() const;
+    const GetHeadersMessage* getGetHeaders() const;
+    const HeadersMessage* getHeaders() const;
+    const PingMessage* getPing() const;
+    const PongMessage* getPong() const;
+    const AddrMessage* getAddr() const;
+    const RejectMessage* getReject() const;
 };
 
 /**
- * Message type utilities
+ * P2P Protocol constants
  */
-class MessageUtils {
-public:
-    static std::string messageTypeToString(MessageType type);
-    static MessageType stringToMessageType(const std::string& str);
-    static std::string inventoryTypeToString(InventoryType type);
-    static InventoryType stringToInventoryType(const std::string& str);
+namespace Protocol {
+    constexpr uint32_t MAGIC_BYTES = 0xF9BEB4D9;
+    constexpr uint32_t PROTOCOL_VERSION = 70015;
+    constexpr uint64_t NODE_NETWORK = 1;
+    constexpr size_t MAX_MESSAGE_SIZE = 32 * 1024 * 1024; // 32MB
+    constexpr size_t MAX_INV_SIZE = 50000;
+    constexpr size_t MAX_ADDR_SIZE = 1000;
     
-    // Validation helpers
-    static bool isValidMessageType(uint32_t type);
-    static bool isValidInventoryType(uint32_t type);
-    static size_t getExpectedPayloadSize(MessageType type);
-    
-    // Network utilities
-    static std::string formatAddress(const std::string& ip, uint16_t port);
-    static bool parseAddress(const std::string& address, std::string& ip, uint16_t& port);
-    static bool isValidIP(const std::string& ip);
-    static bool isPrivateIP(const std::string& ip);
-    
-    // Checksum and validation
-    static uint32_t calculateChecksum(const std::string& data);
-    static bool verifyChecksum(const std::string& data, uint32_t checksum);
-};
+    // Message commands as strings
+    const std::string CMD_VERSION = "version";
+    const std::string CMD_VERACK = "verack";
+    const std::string CMD_INV = "inv";
+    const std::string CMD_GETDATA = "getdata";
+    const std::string CMD_TX = "tx";
+    const std::string CMD_BLOCK = "block";
+    const std::string CMD_GETHEADERS = "getheaders";
+    const std::string CMD_HEADERS = "headers";
+    const std::string CMD_PING = "ping";
+    const std::string CMD_PONG = "pong";
+    const std::string CMD_ADDR = "addr";
+    const std::string CMD_GETADDR = "getaddr";
+    const std::string CMD_REJECT = "reject";
+}
 
 } // namespace pragma

@@ -98,6 +98,15 @@ void Utils::logInfo(const std::string& message) {
     std::cout << "[INFO] " << message << std::endl;
 }
 
+uint32_t Utils::calculateChecksum(const std::vector<uint8_t>& data) {
+    // Simple checksum calculation - in production, use SHA256 double hash
+    uint32_t checksum = 0;
+    for (size_t i = 0; i < data.size(); ++i) {
+        checksum += data[i] * (i + 1);
+    }
+    return checksum;
+}
+
 void Utils::logWarning(const std::string& message) {
     std::cout << "[WARN] " << message << std::endl;
 }

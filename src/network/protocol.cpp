@@ -7,519 +7,717 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <variant>
 
 namespace pragma {
 
 // InventoryVector implementation
-std::string InventoryVector::serialize() const {
-    std::string result;
-    result += Serialize::writeUint32(static_cast<uint32_t>(type));
-    result += Serialize::writeString(hash);
+std::vector<uint8_t> InventoryVector::serialize() const {
+    std::vector<uint8_t> result;
+    auto typeBytes = Serialize::encodeUint32LE(static_cast<uint32_t>(type));
+    auto hashBytes = Serialize::encodeString(hash);
+    result.insert(result.end(), typeBytes.begin(), typeBytes.end());
+    result.insert(result.end(), hashBytes.begin(), hashBytes.end());
     return result;
 }
 
-InventoryVector InventoryVector::deserialize(const std::string& data, size_t& offset) {
+InventoryVector InventoryVector::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
     InventoryVector inv;
-    inv.type = static_cast<InventoryType>(Serialize::readUint32(data, offset));
-    inv.hash = Serialize::readString(data, offset);
+    inv.type = static_cast<InventoryType>(Serialize::decodeUint32LE(data, offset));
+    offset += 4;
+    auto stringResult = Serialize::decodeString(data, offset);
+    inv.hash = stringResult.first;
+    offset += stringResult.second;
     return inv;
 }
 
 // NetworkAddress implementation
-std::string NetworkAddress::serialize() const {
-    std::string result;
-    result += Serialize::writeUint64(services);
-    result += Serialize::writeString(ip);
-    result += Serialize::writeUint16(port);
-    result += Serialize::writeUint64(timestamp);
+std::vector<uint8_t> NetworkAddress::serialize() const {
+    std::vector<uint8_t> result;
+    auto servicesBytes = Serialize::encodeUint64LE(services);
+    auto ipBytes = Serialize::encodeString(ip);
+    auto portBytes = Serialize::encodeUint16LE(port);
+    auto timestampBytes = Serialize::encodeUint64LE(timestamp);
+    
+    result.insert(result.end(), servicesBytes.begin(), servicesBytes.end());
+    result.insert(result.end(), ipBytes.begin(), ipBytes.end());
+    result.insert(result.end(), portBytes.begin(), portBytes.end());
+    result.insert(result.end(), timestampBytes.begin(), timestampBytes.end());
     return result;
 }
 
-NetworkAddress NetworkAddress::deserialize(const std::string& data, size_t& offset) {
+NetworkAddress NetworkAddress::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
     NetworkAddress addr;
-    addr.services = Serialize::readUint64(data, offset);
-    addr.ip = Serialize::readString(data, offset);
-    addr.port = Serialize::readUint16(data, offset);
-    addr.timestamp = Serialize::readUint64(data, offset);
+    addr.services = Serialize::decodeUint64LE(data, offset);
+    offset += 8;
+    auto ipResult = Serialize::decodeString(data, offset);
+    addr.ip = ipResult.first;
+    offset += ipResult.second;
+    addr.port = Serialize::decodeUint16LE(data, offset);
+    offset += 2;
+    addr.timestamp = Serialize::decodeUint64LE(data, offset);
+    offset += 8;
     return addr;
 }
 
+// MessageHeader implementation
+std::vector<uint8_t> MessageHeader::serialize() const {
+    std::vector<uint8_t> result;
+    auto magicBytes = Serialize::encodeUint32LE(magic);
+    auto commandBytes = Serialize::encodeUint32LE(static_cast<uint32_t>(command));
+    auto lengthBytes = Serialize::encodeUint32LE(length);
+    auto checksumBytes = Serialize::encodeUint32LE(checksum);
+    
+    result.insert(result.end(), magicBytes.begin(), magicBytes.end());
+    result.insert(result.end(), commandBytes.begin(), commandBytes.end());
+    result.insert(result.end(), lengthBytes.begin(), lengthBytes.end());
+    result.insert(result.end(), checksumBytes.begin(), checksumBytes.end());
+    return result;
+}
+
+MessageHeader MessageHeader::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    MessageHeader header;
+    header.magic = Serialize::decodeUint32LE(data, offset);
+    offset += 4;
+    header.command = static_cast<MessageType>(Serialize::decodeUint32LE(data, offset));
+    offset += 4;
+    header.length = Serialize::decodeUint32LE(data, offset);
+    offset += 4;
+    header.checksum = Serialize::decodeUint32LE(data, offset);
+    offset += 4;
+    return header;
+}
+
+// VersionMessage implementation
+std::vector<uint8_t> VersionMessage::serialize() const {
+    std::vector<uint8_t> result;
+    auto versionBytes = Serialize::encodeUint32LE(version);
+    auto servicesBytes = Serialize::encodeUint64LE(services);
+    auto timestampBytes = Serialize::encodeUint64LE(timestamp);
+    auto addrRecvBytes = addrRecv.serialize();
+    auto addrFromBytes = addrFrom.serialize();
+    auto nonceBytes = Serialize::encodeUint64LE(nonce);
+    auto userAgentBytes = Serialize::encodeString(userAgent);
+    auto startHeightBytes = Serialize::encodeUint32LE(startHeight);
+    auto relayBytes = Serialize::encodeUint8LE(relay ? 1 : 0);
+    
+    result.insert(result.end(), versionBytes.begin(), versionBytes.end());
+    result.insert(result.end(), servicesBytes.begin(), servicesBytes.end());
+    result.insert(result.end(), timestampBytes.begin(), timestampBytes.end());
+    result.insert(result.end(), addrRecvBytes.begin(), addrRecvBytes.end());
+    result.insert(result.end(), addrFromBytes.begin(), addrFromBytes.end());
+    result.insert(result.end(), nonceBytes.begin(), nonceBytes.end());
+    result.insert(result.end(), userAgentBytes.begin(), userAgentBytes.end());
+    result.insert(result.end(), startHeightBytes.begin(), startHeightBytes.end());
+    result.insert(result.end(), relayBytes.begin(), relayBytes.end());
+    return result;
+}
+
+VersionMessage VersionMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    VersionMessage msg;
+    msg.version = Serialize::decodeUint32LE(data, offset);
+    offset += 4;
+    msg.services = Serialize::decodeUint64LE(data, offset);
+    offset += 8;
+    msg.timestamp = Serialize::decodeUint64LE(data, offset);
+    offset += 8;
+    msg.addrRecv = NetworkAddress::deserialize(data, offset);
+    msg.addrFrom = NetworkAddress::deserialize(data, offset);
+    msg.nonce = Serialize::decodeUint64LE(data, offset);
+    offset += 8;
+    auto userAgentResult = Serialize::decodeString(data, offset);
+    msg.userAgent = userAgentResult.first;
+    offset += userAgentResult.second;
+    msg.startHeight = Serialize::decodeUint32LE(data, offset);
+    offset += 4;
+    // For simplicity, assuming encodeUint8LE exists or using a single byte
+    msg.relay = (data[offset] != 0);
+    offset += 1;
+    return msg;
+}
+
+// InvMessage implementation
+std::vector<uint8_t> InvMessage::serialize() const {
+    std::vector<uint8_t> result;
+    auto countBytes = Serialize::encodeVarInt(inventory.size());
+    result.insert(result.end(), countBytes.begin(), countBytes.end());
+    
+    for (const auto& inv : inventory) {
+        auto invBytes = inv.serialize();
+        result.insert(result.end(), invBytes.begin(), invBytes.end());
+    }
+    return result;
+}
+
+InvMessage InvMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    InvMessage msg;
+    auto countResult = Serialize::decodeVarInt(data, offset);
+    uint64_t count = countResult.first;
+    offset += countResult.second;
+    
+    msg.inventory.reserve(count);
+    for (uint64_t i = 0; i < count; ++i) {
+        msg.inventory.push_back(InventoryVector::deserialize(data, offset));
+    }
+    return msg;
+}
+
+// GetDataMessage implementation
+std::vector<uint8_t> GetDataMessage::serialize() const {
+    std::vector<uint8_t> result;
+    auto countBytes = Serialize::encodeVarInt(inventory.size());
+    result.insert(result.end(), countBytes.begin(), countBytes.end());
+    
+    for (const auto& inv : inventory) {
+        auto invBytes = inv.serialize();
+        result.insert(result.end(), invBytes.begin(), invBytes.end());
+    }
+    return result;
+}
+
+GetDataMessage GetDataMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    GetDataMessage msg;
+    auto countResult = Serialize::decodeVarInt(data, offset);
+    uint64_t count = countResult.first;
+    offset += countResult.second;
+    
+    msg.inventory.reserve(count);
+    for (uint64_t i = 0; i < count; ++i) {
+        msg.inventory.push_back(InventoryVector::deserialize(data, offset));
+    }
+    return msg;
+}
+
+// TxMessage implementation
+std::vector<uint8_t> TxMessage::serialize() const {
+    // This would need to use Transaction's serialize method
+    // For now, return empty vector as placeholder
+    return std::vector<uint8_t>();
+}
+
+TxMessage TxMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    TxMessage msg;
+    // This would need to use Transaction's deserialize method
+    // For now, return empty message as placeholder
+    return msg;
+}
+
+// BlockMessage implementation
+std::vector<uint8_t> BlockMessage::serialize() const {
+    // This would need to use Block's serialize method
+    // For now, return empty vector as placeholder
+    return std::vector<uint8_t>();
+}
+
+BlockMessage BlockMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    BlockMessage msg;
+    // This would need to use Block's deserialize method
+    // For now, return empty message as placeholder
+    return msg;
+}
+
+// GetHeadersMessage implementation
+std::vector<uint8_t> GetHeadersMessage::serialize() const {
+    std::vector<uint8_t> result;
+    auto versionBytes = Serialize::encodeUint32LE(version);
+    auto countBytes = Serialize::encodeVarInt(locatorHashes.size());
+    auto stopHashBytes = Serialize::encodeString(stopHash);
+    
+    result.insert(result.end(), versionBytes.begin(), versionBytes.end());
+    result.insert(result.end(), countBytes.begin(), countBytes.end());
+    
+    for (const auto& hash : locatorHashes) {
+        auto hashBytes = Serialize::encodeString(hash);
+        result.insert(result.end(), hashBytes.begin(), hashBytes.end());
+    }
+    
+    result.insert(result.end(), stopHashBytes.begin(), stopHashBytes.end());
+    return result;
+}
+
+GetHeadersMessage GetHeadersMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    GetHeadersMessage msg;
+    msg.version = Serialize::decodeUint32LE(data, offset);
+    offset += 4;
+    
+    auto countResult = Serialize::decodeVarInt(data, offset);
+    uint64_t count = countResult.first;
+    offset += countResult.second;
+    
+    msg.locatorHashes.reserve(count);
+    for (uint64_t i = 0; i < count; ++i) {
+        auto hashResult = Serialize::decodeString(data, offset);
+        msg.locatorHashes.push_back(hashResult.first);
+        offset += hashResult.second;
+    }
+    
+    auto stopHashResult = Serialize::decodeString(data, offset);
+    msg.stopHash = stopHashResult.first;
+    offset += stopHashResult.second;
+    
+    return msg;
+}
+
+// HeadersMessage implementation
+std::vector<uint8_t> HeadersMessage::serialize() const {
+    std::vector<uint8_t> result;
+    auto countBytes = Serialize::encodeVarInt(headers.size());
+    result.insert(result.end(), countBytes.begin(), countBytes.end());
+    
+    // This would need to serialize block headers
+    // For now, return basic structure
+    return result;
+}
+
+HeadersMessage HeadersMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    HeadersMessage msg;
+    auto countResult = Serialize::decodeVarInt(data, offset);
+    uint64_t count = countResult.first;
+    offset += countResult.second;
+    
+    // This would need to deserialize block headers
+    // For now, return empty message
+    return msg;
+}
+
+// PingMessage implementation
+std::vector<uint8_t> PingMessage::serialize() const {
+    return Serialize::encodeUint64LE(nonce);
+}
+
+PingMessage PingMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    PingMessage msg;
+    msg.nonce = Serialize::decodeUint64LE(data, offset);
+    offset += 8;
+    return msg;
+}
+
+// PongMessage implementation
+std::vector<uint8_t> PongMessage::serialize() const {
+    return Serialize::encodeUint64LE(nonce);
+}
+
+PongMessage PongMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    PongMessage msg;
+    msg.nonce = Serialize::decodeUint64LE(data, offset);
+    offset += 8;
+    return msg;
+}
+
+// AddrMessage implementation
+std::vector<uint8_t> AddrMessage::serialize() const {
+    std::vector<uint8_t> result;
+    auto countBytes = Serialize::encodeVarInt(addresses.size());
+    result.insert(result.end(), countBytes.begin(), countBytes.end());
+    
+    for (const auto& addr : addresses) {
+        auto addrBytes = addr.serialize();
+        result.insert(result.end(), addrBytes.begin(), addrBytes.end());
+    }
+    return result;
+}
+
+AddrMessage AddrMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    AddrMessage msg;
+    auto countResult = Serialize::decodeVarInt(data, offset);
+    uint64_t count = countResult.first;
+    offset += countResult.second;
+    
+    msg.addresses.reserve(count);
+    for (uint64_t i = 0; i < count; ++i) {
+        msg.addresses.push_back(NetworkAddress::deserialize(data, offset));
+    }
+    return msg;
+}
+
+// RejectMessage implementation
+std::vector<uint8_t> RejectMessage::serialize() const {
+    std::vector<uint8_t> result;
+    auto messageBytes = Serialize::encodeString(message);
+    auto codeBytes = Serialize::encodeUint8LE(code);
+    auto reasonBytes = Serialize::encodeString(reason);
+    auto dataBytes = Serialize::encodeBytes(data);
+    
+    result.insert(result.end(), messageBytes.begin(), messageBytes.end());
+    result.insert(result.end(), codeBytes.begin(), codeBytes.end());
+    result.insert(result.end(), reasonBytes.begin(), reasonBytes.end());
+    result.insert(result.end(), dataBytes.begin(), dataBytes.end());
+    return result;
+}
+
+RejectMessage RejectMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    RejectMessage msg;
+    auto messageResult = Serialize::decodeString(data, offset);
+    msg.message = messageResult.first;
+    offset += messageResult.second;
+    
+    // For simplicity, assuming encodeUint8LE exists or using a single byte
+    msg.code = data[offset];
+    offset += 1;
+    
+    auto reasonResult = Serialize::decodeString(data, offset);
+    msg.reason = reasonResult.first;
+    offset += reasonResult.second;
+    
+    // For simplicity, reading remaining data
+    msg.data.assign(data.begin() + offset, data.end());
+    
+    return msg;
+}
+
+// P2PMessage implementation
+std::vector<uint8_t> P2PMessage::serialize() const {
+    std::vector<uint8_t> payload;
+    
+    switch (header.command) {
+        case MessageType::VERSION:
+            if (auto* version = std::get_if<VersionMessage>(&data)) {
+                payload = version->serialize();
+            }
+            break;
+        case MessageType::VERACK:
+            // Empty payload
+            break;
+        case MessageType::INV:
+            if (auto* inv = std::get_if<InvMessage>(&data)) {
+                payload = inv->serialize();
+            }
+            break;
+        case MessageType::GETDATA:
+            if (auto* getdata = std::get_if<GetDataMessage>(&data)) {
+                payload = getdata->serialize();
+            }
+            break;
+        case MessageType::TX:
+            if (auto* tx = std::get_if<TxMessage>(&data)) {
+                payload = tx->serialize();
+            }
+            break;
+        case MessageType::BLOCK:
+            if (auto* block = std::get_if<BlockMessage>(&data)) {
+                payload = block->serialize();
+            }
+            break;
+        case MessageType::GETHEADERS:
+            if (auto* getheaders = std::get_if<GetHeadersMessage>(&data)) {
+                payload = getheaders->serialize();
+            }
+            break;
+        case MessageType::HEADERS:
+            if (auto* headers = std::get_if<HeadersMessage>(&data)) {
+                payload = headers->serialize();
+            }
+            break;
+        case MessageType::PING:
+            if (auto* ping = std::get_if<PingMessage>(&data)) {
+                payload = ping->serialize();
+            }
+            break;
+        case MessageType::PONG:
+            if (auto* pong = std::get_if<PongMessage>(&data)) {
+                payload = pong->serialize();
+            }
+            break;
+        case MessageType::ADDR:
+            if (auto* addr = std::get_if<AddrMessage>(&data)) {
+                payload = addr->serialize();
+            }
+            break;
+        case MessageType::REJECT:
+            if (auto* reject = std::get_if<RejectMessage>(&data)) {
+                payload = reject->serialize();
+            }
+            break;
+    }
+    
+    // Update header with payload info
+    MessageHeader updatedHeader = header;
+    updatedHeader.length = static_cast<uint32_t>(payload.size());
+    updatedHeader.checksum = Utils::calculateChecksum(payload);
+    
+    auto headerBytes = updatedHeader.serialize();
+    headerBytes.insert(headerBytes.end(), payload.begin(), payload.end());
+    
+    return headerBytes;
+}
+
+P2PMessage P2PMessage::deserialize(const std::vector<uint8_t>& data, size_t& offset) {
+    P2PMessage msg;
+    msg.header = MessageHeader::deserialize(data, offset);
+    
+    // Extract payload
+    std::vector<uint8_t> payload(data.begin() + offset, data.begin() + offset + msg.header.length);
+    size_t payloadOffset = 0;
+    
+    switch (msg.header.command) {
+        case MessageType::VERSION:
+            msg.data = VersionMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::VERACK:
+            // Empty payload
+            break;
+        case MessageType::INV:
+            msg.data = InvMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::GETDATA:
+            msg.data = GetDataMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::TX:
+            msg.data = TxMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::BLOCK:
+            msg.data = BlockMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::GETHEADERS:
+            msg.data = GetHeadersMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::HEADERS:
+            msg.data = HeadersMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::PING:
+            msg.data = PingMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::PONG:
+            msg.data = PongMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::ADDR:
+            msg.data = AddrMessage::deserialize(payload, payloadOffset);
+            break;
+        case MessageType::REJECT:
+            msg.data = RejectMessage::deserialize(payload, payloadOffset);
+            break;
+    }
+    
+    offset += msg.header.length;
+    return msg;
+}
+
+// NetworkAddress toString implementation  
 std::string NetworkAddress::toString() const {
     return ip + ":" + std::to_string(port);
 }
 
-// MessageHeader implementation
-std::string MessageHeader::serialize() const {
-    std::string result;
-    result += Serialize::writeUint32(magic);
-    result += Serialize::writeUint32(static_cast<uint32_t>(command));
-    result += Serialize::writeUint32(length);
-    result += Serialize::writeUint32(checksum);
-    return result;
-}
-
-MessageHeader MessageHeader::deserialize(const std::string& data) {
-    MessageHeader header;
-    size_t offset = 0;
-    header.magic = Serialize::readUint32(data, offset);
-    header.command = static_cast<MessageType>(Serialize::readUint32(data, offset));
-    header.length = Serialize::readUint32(data, offset);
-    header.checksum = Serialize::readUint32(data, offset);
-    return header;
-}
-
-bool MessageHeader::isValid() const {
-    return magic == MAGIC_MAIN && MessageUtils::isValidMessageType(static_cast<uint32_t>(command));
-}
-
-// VersionMessage implementation
-std::string VersionMessage::serialize() const {
-    std::string result;
-    result += Serialize::writeUint32(version);
-    result += Serialize::writeUint64(services);
-    result += Serialize::writeUint64(timestamp);
-    result += addrRecv.serialize();
-    result += addrFrom.serialize();
-    result += Serialize::writeUint64(nonce);
-    result += Serialize::writeString(userAgent);
-    result += Serialize::writeUint32(startHeight);
-    result += Serialize::writeBool(relay);
-    return result;
-}
-
-VersionMessage VersionMessage::deserialize(const std::string& data) {
-    VersionMessage version;
-    size_t offset = 0;
-    version.version = Serialize::readUint32(data, offset);
-    version.services = Serialize::readUint64(data, offset);
-    version.timestamp = Serialize::readUint64(data, offset);
-    version.addrRecv = NetworkAddress::deserialize(data, offset);
-    version.addrFrom = NetworkAddress::deserialize(data, offset);
-    version.nonce = Serialize::readUint64(data, offset);
-    version.userAgent = Serialize::readString(data, offset);
-    version.startHeight = Serialize::readUint32(data, offset);
-    version.relay = Serialize::readBool(data, offset);
-    return version;
-}
-
-// PingPongMessage implementation
-std::string PingPongMessage::serialize() const {
-    return Serialize::writeUint64(nonce);
-}
-
-PingPongMessage PingPongMessage::deserialize(const std::string& data) {
-    PingPongMessage ping;
-    size_t offset = 0;
-    ping.nonce = Serialize::readUint64(data, offset);
-    return ping;
-}
-
-// InvMessage implementation
-std::string InvMessage::serialize() const {
-    std::string result;
-    result += Serialize::writeVarInt(inventory.size());
-    for (const auto& inv : inventory) {
-        result += inv.serialize();
-    }
-    return result;
-}
-
-InvMessage InvMessage::deserialize(const std::string& data) {
-    InvMessage inv;
-    size_t offset = 0;
-    uint64_t count = Serialize::readVarInt(data, offset);
-    inv.inventory.reserve(count);
-    
-    for (uint64_t i = 0; i < count; ++i) {
-        inv.inventory.push_back(InventoryVector::deserialize(data, offset));
-    }
-    
-    return inv;
-}
-
-// GetHeadersMessage implementation
-std::string GetHeadersMessage::serialize() const {
-    std::string result;
-    result += Serialize::writeUint32(version);
-    result += Serialize::writeVarInt(locatorHashes.size());
-    for (const auto& hash : locatorHashes) {
-        result += Serialize::writeString(hash);
-    }
-    result += Serialize::writeString(hashStop);
-    return result;
-}
-
-GetHeadersMessage GetHeadersMessage::deserialize(const std::string& data) {
-    GetHeadersMessage getHeaders;
-    size_t offset = 0;
-    getHeaders.version = Serialize::readUint32(data, offset);
-    uint64_t count = Serialize::readVarInt(data, offset);
-    getHeaders.locatorHashes.reserve(count);
-    
-    for (uint64_t i = 0; i < count; ++i) {
-        getHeaders.locatorHashes.push_back(Serialize::readString(data, offset));
-    }
-    
-    getHeaders.hashStop = Serialize::readString(data, offset);
-    return getHeaders;
-}
-
-// HeadersMessage implementation
-std::string HeadersMessage::serialize() const {
-    std::string result;
-    result += Serialize::writeVarInt(headers.size());
-    for (const auto& header : headers) {
-        result += Serialize::writeString(header);
-    }
-    return result;
-}
-
-HeadersMessage HeadersMessage::deserialize(const std::string& data) {
-    HeadersMessage headers;
-    size_t offset = 0;
-    uint64_t count = Serialize::readVarInt(data, offset);
-    headers.headers.reserve(count);
-    
-    for (uint64_t i = 0; i < count; ++i) {
-        headers.headers.push_back(Serialize::readString(data, offset));
-    }
-    
-    return headers;
-}
-
-// AddrMessage implementation
-std::string AddrMessage::serialize() const {
-    std::string result;
-    result += Serialize::writeVarInt(addresses.size());
-    for (const auto& addr : addresses) {
-        result += addr.serialize();
-    }
-    return result;
-}
-
-AddrMessage AddrMessage::deserialize(const std::string& data) {
-    AddrMessage addr;
-    size_t offset = 0;
-    uint64_t count = Serialize::readVarInt(data, offset);
-    addr.addresses.reserve(count);
-    
-    for (uint64_t i = 0; i < count; ++i) {
-        addr.addresses.push_back(NetworkAddress::deserialize(data, offset));
-    }
-    
-    return addr;
-}
-
-// RejectMessage implementation
-std::string RejectMessage::serialize() const {
-    std::string result;
-    result += Serialize::writeString(message);
-    result += Serialize::writeUint8(code);
-    result += Serialize::writeString(reason);
-    result += Serialize::writeString(data);
-    return result;
-}
-
-RejectMessage RejectMessage::deserialize(const std::string& data) {
-    RejectMessage reject;
-    size_t offset = 0;
-    reject.message = Serialize::readString(data, offset);
-    reject.code = Serialize::readUint8(data, offset);
-    reject.reason = Serialize::readString(data, offset);
-    reject.data = Serialize::readString(data, offset);
-    return reject;
-}
-
-// P2PMessage implementation
-P2PMessage::P2PMessage(MessageType type, const std::string& data) {
-    header.magic = MessageHeader::MAGIC_MAIN;
-    header.command = type;
-    header.length = data.length();
-    header.checksum = calculateChecksum(data);
-    payload = data;
-}
-
-std::string P2PMessage::serialize() const {
-    return header.serialize() + payload;
-}
-
-std::shared_ptr<P2PMessage> P2PMessage::deserialize(const std::string& data) {
-    if (data.length() < MessageHeader::HEADER_SIZE) {
-        return nullptr;
-    }
-    
+// P2PMessage factory methods implementation
+std::shared_ptr<P2PMessage> P2PMessage::createInv(const std::vector<InventoryVector>& inv) {
     auto message = std::make_shared<P2PMessage>();
-    message->header = MessageHeader::deserialize(data.substr(0, MessageHeader::HEADER_SIZE));
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::INV;
     
-    if (!message->header.isValid()) {
-        return nullptr;
-    }
-    
-    if (data.length() < MessageHeader::HEADER_SIZE + message->header.length) {
-        return nullptr;
-    }
-    
-    message->payload = data.substr(MessageHeader::HEADER_SIZE, message->header.length);
-    
-    if (message->calculateChecksum(message->payload) != message->header.checksum) {
-        return nullptr;
-    }
+    InvMessage invMsg;
+    invMsg.inventory = inv;
+    message->data = invMsg;
     
     return message;
 }
 
-bool P2PMessage::isValid() const {
-    return header.isValid() && calculateChecksum(payload) == header.checksum;
-}
-
-uint32_t P2PMessage::calculateChecksum(const std::string& data) const {
-    return MessageUtils::calculateChecksum(data);
-}
-
-// Message getter methods
-VersionMessage P2PMessage::getVersionMessage() const {
-    return VersionMessage::deserialize(payload);
-}
-
-PingPongMessage P2PMessage::getPingPongMessage() const {
-    return PingPongMessage::deserialize(payload);
-}
-
-InvMessage P2PMessage::getInvMessage() const {
-    return InvMessage::deserialize(payload);
-}
-
-GetDataMessage P2PMessage::getGetDataMessage() const {
-    return GetDataMessage::deserialize(payload);
-}
-
-GetHeadersMessage P2PMessage::getGetHeadersMessage() const {
-    return GetHeadersMessage::deserialize(payload);
-}
-
-HeadersMessage P2PMessage::getHeadersMessage() const {
-    return HeadersMessage::deserialize(payload);
-}
-
-AddrMessage P2PMessage::getAddrMessage() const {
-    return AddrMessage::deserialize(payload);
-}
-
-RejectMessage P2PMessage::getRejectMessage() const {
-    return RejectMessage::deserialize(payload);
-}
-
-// Factory methods
 std::shared_ptr<P2PMessage> P2PMessage::createVersion(const VersionMessage& version) {
-    return std::make_shared<P2PMessage>(MessageType::VERSION, version.serialize());
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::VERSION;
+    message->data = version;
+    return message;
 }
 
-std::shared_ptr<P2PMessage> P2PMessage::createVerAck() {
-    return std::make_shared<P2PMessage>(MessageType::VERACK, "");
-}
-
-std::shared_ptr<P2PMessage> P2PMessage::createPing(uint64_t nonce) {
-    PingPongMessage ping;
-    ping.nonce = nonce;
-    return std::make_shared<P2PMessage>(MessageType::PING, ping.serialize());
-}
-
-std::shared_ptr<P2PMessage> P2PMessage::createPong(uint64_t nonce) {
-    PingPongMessage pong;
-    pong.nonce = nonce;
-    return std::make_shared<P2PMessage>(MessageType::PONG, pong.serialize());
-}
-
-std::shared_ptr<P2PMessage> P2PMessage::createInv(const std::vector<InventoryVector>& inv) {
-    InvMessage invMsg;
-    invMsg.inventory = inv;
-    return std::make_shared<P2PMessage>(MessageType::INV, invMsg.serialize());
+std::shared_ptr<P2PMessage> P2PMessage::createVerack() {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::VERACK;
+    message->data = std::monostate{};
+    return message;
 }
 
 std::shared_ptr<P2PMessage> P2PMessage::createGetData(const std::vector<InventoryVector>& inv) {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::GETDATA;
+    
     GetDataMessage getDataMsg;
     getDataMsg.inventory = inv;
-    return std::make_shared<P2PMessage>(MessageType::GETDATA, getDataMsg.serialize());
+    message->data = getDataMsg;
+    
+    return message;
+}
+
+std::shared_ptr<P2PMessage> P2PMessage::createTx(std::shared_ptr<Transaction> tx) {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::TX;
+    
+    TxMessage txMsg;
+    txMsg.transaction = tx;
+    message->data = txMsg;
+    
+    return message;
+}
+
+std::shared_ptr<P2PMessage> P2PMessage::createBlock(std::shared_ptr<Block> block) {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::BLOCK;
+    
+    BlockMessage blockMsg;
+    blockMsg.block = block;
+    message->data = blockMsg;
+    
+    return message;
 }
 
 std::shared_ptr<P2PMessage> P2PMessage::createGetHeaders(const GetHeadersMessage& getHeaders) {
-    return std::make_shared<P2PMessage>(MessageType::GETHEADERS, getHeaders.serialize());
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::GETHEADERS;
+    message->data = getHeaders;
+    return message;
 }
 
-std::shared_ptr<P2PMessage> P2PMessage::createHeaders(const std::vector<std::string>& headers) {
-    HeadersMessage headerMsg;
-    headerMsg.headers = headers;
-    return std::make_shared<P2PMessage>(MessageType::HEADERS, headerMsg.serialize());
+std::shared_ptr<P2PMessage> P2PMessage::createHeaders(const std::vector<std::shared_ptr<Block>>& headers) {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::HEADERS;
+    
+    HeadersMessage headersMsg;
+    headersMsg.headers = headers;
+    message->data = headersMsg;
+    
+    return message;
 }
 
-std::shared_ptr<P2PMessage> P2PMessage::createTx(const Transaction& tx) {
-    return std::make_shared<P2PMessage>(MessageType::TX, tx.serialize());
+std::shared_ptr<P2PMessage> P2PMessage::createPing(uint64_t nonce) {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::PING;
+    
+    PingMessage pingMsg;
+    pingMsg.nonce = nonce;
+    message->data = pingMsg;
+    
+    return message;
 }
 
-std::shared_ptr<P2PMessage> P2PMessage::createBlock(const Block& block) {
-    return std::make_shared<P2PMessage>(MessageType::BLOCK, block.serialize());
+std::shared_ptr<P2PMessage> P2PMessage::createPong(uint64_t nonce) {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::PONG;
+    
+    PongMessage pongMsg;
+    pongMsg.nonce = nonce;
+    message->data = pongMsg;
+    
+    return message;
 }
 
 std::shared_ptr<P2PMessage> P2PMessage::createAddr(const std::vector<NetworkAddress>& addresses) {
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::ADDR;
+    
     AddrMessage addrMsg;
     addrMsg.addresses = addresses;
-    return std::make_shared<P2PMessage>(MessageType::ADDR, addrMsg.serialize());
+    message->data = addrMsg;
+    
+    return message;
 }
 
 std::shared_ptr<P2PMessage> P2PMessage::createReject(const RejectMessage& reject) {
-    return std::make_shared<P2PMessage>(MessageType::REJECT, reject.serialize());
+    auto message = std::make_shared<P2PMessage>();
+    message->header.magic = Protocol::MAGIC_BYTES;
+    message->header.command = MessageType::REJECT;
+    message->data = reject;
+    return message;
 }
 
-// MessageUtils implementation
-std::string MessageUtils::messageTypeToString(MessageType type) {
-    switch (type) {
-        case MessageType::VERSION: return "version";
-        case MessageType::VERACK: return "verack";
-        case MessageType::PING: return "ping";
-        case MessageType::PONG: return "pong";
-        case MessageType::INV: return "inv";
-        case MessageType::GETDATA: return "getdata";
-        case MessageType::GETBLOCKS: return "getblocks";
-        case MessageType::GETHEADERS: return "getheaders";
-        case MessageType::TX: return "tx";
-        case MessageType::BLOCK: return "block";
-        case MessageType::HEADERS: return "headers";
-        case MessageType::ADDR: return "addr";
-        case MessageType::GETADDR: return "getaddr";
-        case MessageType::REJECT: return "reject";
-        case MessageType::MEMPOOL: return "mempool";
-        case MessageType::NOTFOUND: return "notfound";
-        default: return "unknown";
-    }
+// Message type checking methods
+bool P2PMessage::isVersion() const {
+    return header.command == MessageType::VERSION;
 }
 
-MessageType MessageUtils::stringToMessageType(const std::string& str) {
-    if (str == "version") return MessageType::VERSION;
-    if (str == "verack") return MessageType::VERACK;
-    if (str == "ping") return MessageType::PING;
-    if (str == "pong") return MessageType::PONG;
-    if (str == "inv") return MessageType::INV;
-    if (str == "getdata") return MessageType::GETDATA;
-    if (str == "getblocks") return MessageType::GETBLOCKS;
-    if (str == "getheaders") return MessageType::GETHEADERS;
-    if (str == "tx") return MessageType::TX;
-    if (str == "block") return MessageType::BLOCK;
-    if (str == "headers") return MessageType::HEADERS;
-    if (str == "addr") return MessageType::ADDR;
-    if (str == "getaddr") return MessageType::GETADDR;
-    if (str == "reject") return MessageType::REJECT;
-    if (str == "mempool") return MessageType::MEMPOOL;
-    if (str == "notfound") return MessageType::NOTFOUND;
-    return static_cast<MessageType>(0);
+bool P2PMessage::isVerack() const {
+    return header.command == MessageType::VERACK;
 }
 
-std::string MessageUtils::inventoryTypeToString(InventoryType type) {
-    switch (type) {
-        case InventoryType::ERROR: return "error";
-        case InventoryType::TX: return "tx";
-        case InventoryType::BLOCK: return "block";
-        case InventoryType::FILTERED_BLOCK: return "filtered_block";
-        case InventoryType::COMPACT_BLOCK: return "compact_block";
-        default: return "unknown";
-    }
+bool P2PMessage::isInv() const {
+    return header.command == MessageType::INV;
 }
 
-InventoryType MessageUtils::stringToInventoryType(const std::string& str) {
-    if (str == "error") return InventoryType::ERROR;
-    if (str == "tx") return InventoryType::TX;
-    if (str == "block") return InventoryType::BLOCK;
-    if (str == "filtered_block") return InventoryType::FILTERED_BLOCK;
-    if (str == "compact_block") return InventoryType::COMPACT_BLOCK;
-    return InventoryType::ERROR;
+bool P2PMessage::isGetData() const {
+    return header.command == MessageType::GETDATA;
 }
 
-bool MessageUtils::isValidMessageType(uint32_t type) {
-    return type >= 1 && type <= 16;
+bool P2PMessage::isTx() const {
+    return header.command == MessageType::TX;
 }
 
-bool MessageUtils::isValidInventoryType(uint32_t type) {
-    return type <= 4;
+bool P2PMessage::isBlock() const {
+    return header.command == MessageType::BLOCK;
 }
 
-size_t MessageUtils::getExpectedPayloadSize(MessageType type) {
-    switch (type) {
-        case MessageType::VERACK: return 0;
-        case MessageType::PING:
-        case MessageType::PONG: return 8;
-        case MessageType::GETADDR: return 0;
-        case MessageType::MEMPOOL: return 0;
-        default: return SIZE_MAX; // Variable size
-    }
+bool P2PMessage::isGetHeaders() const {
+    return header.command == MessageType::GETHEADERS;
 }
 
-std::string MessageUtils::formatAddress(const std::string& ip, uint16_t port) {
-    return ip + ":" + std::to_string(port);
+bool P2PMessage::isHeaders() const {
+    return header.command == MessageType::HEADERS;
 }
 
-bool MessageUtils::parseAddress(const std::string& address, std::string& ip, uint16_t& port) {
-    size_t colonPos = address.find_last_of(':');
-    if (colonPos == std::string::npos) {
-        return false;
-    }
-    
-    ip = address.substr(0, colonPos);
-    try {
-        port = static_cast<uint16_t>(std::stoul(address.substr(colonPos + 1)));
-        return isValidIP(ip);
-    } catch (...) {
-        return false;
-    }
+bool P2PMessage::isPing() const {
+    return header.command == MessageType::PING;
 }
 
-bool MessageUtils::isValidIP(const std::string& ip) {
-    // Simple IPv4 validation
-    size_t dots = 0;
-    size_t start = 0;
-    
-    for (size_t i = 0; i <= ip.length(); ++i) {
-        if (i == ip.length() || ip[i] == '.') {
-            if (i == start) return false; // Empty segment
-            
-            std::string segment = ip.substr(start, i - start);
-            if (segment.length() > 3) return false;
-            
-            try {
-                int value = std::stoi(segment);
-                if (value < 0 || value > 255) return false;
-            } catch (...) {
-                return false;
-            }
-            
-            start = i + 1;
-            dots++;
-        }
-    }
-    
-    return dots == 4;
+bool P2PMessage::isPong() const {
+    return header.command == MessageType::PONG;
 }
 
-bool MessageUtils::isPrivateIP(const std::string& ip) {
-    // Check for common private IP ranges
-    return ip.substr(0, 4) == "192." || 
-           ip.substr(0, 3) == "10." || 
-           ip.substr(0, 8) == "172.16." ||
-           ip.substr(0, 9) == "127.0.0.";
+bool P2PMessage::isAddr() const {
+    return header.command == MessageType::ADDR;
 }
 
-uint32_t MessageUtils::calculateChecksum(const std::string& data) {
-    std::string hash = Hash::sha256(Hash::sha256(data));
-    if (hash.length() < 8) return 0;
-    
-    // Take first 4 bytes of double SHA256
-    uint32_t checksum = 0;
-    for (int i = 0; i < 4; ++i) {
-        checksum |= (static_cast<uint32_t>(static_cast<unsigned char>(hash[i])) << (i * 8));
-    }
-    return checksum;
+bool P2PMessage::isReject() const {
+    return header.command == MessageType::REJECT;
 }
 
-bool MessageUtils::verifyChecksum(const std::string& data, uint32_t checksum) {
-    return calculateChecksum(data) == checksum;
+// Payload extraction methods
+const VersionMessage* P2PMessage::getVersion() const {
+    return std::get_if<VersionMessage>(&data);
+}
+
+const InvMessage* P2PMessage::getInv() const {
+    return std::get_if<InvMessage>(&data);
+}
+
+const GetDataMessage* P2PMessage::getGetData() const {
+    return std::get_if<GetDataMessage>(&data);
+}
+
+const TxMessage* P2PMessage::getTx() const {
+    return std::get_if<TxMessage>(&data);
+}
+
+const BlockMessage* P2PMessage::getBlock() const {
+    return std::get_if<BlockMessage>(&data);
+}
+
+const GetHeadersMessage* P2PMessage::getGetHeaders() const {
+    return std::get_if<GetHeadersMessage>(&data);
+}
+
+const HeadersMessage* P2PMessage::getHeaders() const {
+    return std::get_if<HeadersMessage>(&data);
+}
+
+const PingMessage* P2PMessage::getPing() const {
+    return std::get_if<PingMessage>(&data);
+}
+
+const PongMessage* P2PMessage::getPong() const {
+    return std::get_if<PongMessage>(&data);
+}
+
+const AddrMessage* P2PMessage::getAddr() const {
+    return std::get_if<AddrMessage>(&data);
+}
+
+const RejectMessage* P2PMessage::getReject() const {
+    return std::get_if<RejectMessage>(&data);
 }
 
 } // namespace pragma

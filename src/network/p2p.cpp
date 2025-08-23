@@ -8,9 +8,43 @@
 #include "../primitives/utils.h"
 #include <iostream>
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
 #include <random>
 
 namespace pragma {
+
+std::string messageTypeToString(MessageType type) {
+    switch(type) {
+        case MessageType::VERSION: return "VERSION";
+        case MessageType::VERACK: return "VERACK";
+        case MessageType::INV: return "INV";
+        case MessageType::GETDATA: return "GETDATA";
+        case MessageType::TX: return "TX";
+        case MessageType::BLOCK: return "BLOCK";
+        case MessageType::PING: return "PING";
+        case MessageType::PONG: return "PONG";
+        case MessageType::ADDR: return "ADDR";
+        case MessageType::REJECT: return "REJECT";
+        default: return "UNKNOWN";
+    }
+}
+
+void parseAddress(const std::string& addressStr, std::string& ip, uint16_t& port) {
+    size_t colonPos = addressStr.find(':');
+    if (colonPos != std::string::npos) {
+        ip = addressStr.substr(0, colonPos);
+        port = std::stoi(addressStr.substr(colonPos + 1));
+    } else {
+        ip = addressStr;
+        port = 8333; // Default port
+    }
+}
+
+bool isValidIP(const std::string& ip) {
+    // Simple IP validation
+    return !ip.empty() && ip != "0.0.0.0";
+}
 
 SyncManager::SyncManager(ChainState* chain, PeerManager* peers)
     : chainState(chain), peerManager(peers), state(SyncState::IDLE), targetHeight(0), currentHeight(0) {}
@@ -138,7 +172,7 @@ void P2PNetwork::banPeer(const std::string& peerId, const std::string& reason) {
 }
 
 void P2PNetwork::broadcastTransaction(const Transaction& tx) {
-    auto inv = std::vector<InventoryVector>{ InventoryVector(InventoryType::TX, tx.getTxid()) };
+    auto inv = std::vector<InventoryVector>{ InventoryVector(InventoryType::TX, tx.txid) };
     relayInventory(inv);
 }
 
@@ -202,7 +236,7 @@ void P2PNetwork::onPeerBanned(const std::string& peerId, const std::string& reas
 }
 
 void P2PNetwork::onMessageReceived(const std::string& peerId, std::shared_ptr<P2PMessage> message) {
-    std::cout << "Message received from " << peerId << " Type: " << MessageUtils::messageTypeToString(message->header.command) << std::endl;
+    std::cout << "Message received from " << peerId << " Type: " << messageTypeToString(message->header.command) << std::endl;
 }
 
 void P2PNetwork::onInvalidMessage(const std::string& peerId, const std::string& reason) {
@@ -214,7 +248,7 @@ void P2PNetwork::onInventoryReceived(const std::string& peerId, const std::vecto
 }
 
 void P2PNetwork::onTransactionReceived(const std::string& peerId, const Transaction& tx) {
-    std::cout << "Transaction received from " << peerId << " TXID: " << tx.getTxid() << std::endl;
+    std::cout << "Transaction received from " << peerId << " TXID: " << tx.txid << std::endl;
 }
 
 void P2PNetwork::onBlockReceived(const std::string& peerId, const Block& block) {
@@ -273,12 +307,12 @@ void P2PNetwork::simulateHandshake(const std::string& peerId) {
 NetworkAddress P2PNetwork::stringToAddress(const std::string& addressStr) {
     std::string ip;
     uint16_t port = config.port;
-    MessageUtils::parseAddress(addressStr, ip, port);
+    parseAddress(addressStr, ip, port);
     return NetworkAddress(ip, port);
 }
 
 bool P2PNetwork::isValidPeerAddress(const NetworkAddress& address) {
-    return MessageUtils::isValidIP(address.ip) && address.port > 0;
+    return isValidIP(address.ip) && address.port > 0;
 }
 
 void P2PNetwork::cleanupNetwork() {

@@ -132,8 +132,8 @@ private:
     void processMessage(const std::string& peerId, std::shared_ptr<P2PMessage> message);
     void handleVersionMessage(const std::string& peerId, const VersionMessage& version);
     void handleVerackMessage(const std::string& peerId);
-    void handlePingMessage(const std::string& peerId, const PingPongMessage& ping);
-    void handlePongMessage(const std::string& peerId, const PingPongMessage& pong);
+    void handlePingMessage(const std::string& peerId, const PingMessage& ping);
+    void handlePongMessage(const std::string& peerId, const PongMessage& pong);
     void handleInvMessage(const std::string& peerId, const InvMessage& inv);
     void handleGetDataMessage(const std::string& peerId, const GetDataMessage& getData);
     void handleTxMessage(const std::string& peerId, const std::string& txData);
@@ -236,7 +236,7 @@ public:
 private:
     // Address book for peer discovery
     std::vector<NetworkAddress> knownAddresses;
-    std::mutex addressMutex;
+    mutable std::mutex addressMutex;
     
     // Utility methods
     NetworkAddress stringToAddress(const std::string& addressStr);

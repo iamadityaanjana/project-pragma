@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
+#include <random>
 
 namespace pragma {
 
@@ -435,7 +437,9 @@ void PeerManager::sendToRandomPeers(std::shared_ptr<P2PMessage> message, size_t 
     if (peers.empty()) return;
     
     // Shuffle and take first 'count' peers
-    std::random_shuffle(peers.begin(), peers.end());
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(peers.begin(), peers.end(), g);
     size_t sendCount = std::min(count, peers.size());
     
     for (size_t i = 0; i < sendCount; ++i) {

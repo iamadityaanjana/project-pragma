@@ -56,6 +56,10 @@ std::pair<uint64_t, size_t> Serialize::decodeVarInt(const std::vector<uint8_t>& 
     }
 }
 
+std::vector<uint8_t> Serialize::encodeUint8LE(uint8_t value) {
+    return {value};
+}
+
 std::vector<uint8_t> Serialize::encodeUint16LE(uint16_t value) {
     return toLittleEndian(value);
 }
@@ -66,6 +70,13 @@ std::vector<uint8_t> Serialize::encodeUint32LE(uint32_t value) {
 
 std::vector<uint8_t> Serialize::encodeUint64LE(uint64_t value) {
     return toLittleEndian(value);
+}
+
+uint8_t Serialize::decodeUint8LE(const std::vector<uint8_t>& data, size_t offset) {
+    if (offset >= data.size()) {
+        throw std::runtime_error("Uint8 decode: insufficient data");
+    }
+    return data[offset];
 }
 
 uint16_t Serialize::decodeUint16LE(const std::vector<uint8_t>& data, size_t offset) {

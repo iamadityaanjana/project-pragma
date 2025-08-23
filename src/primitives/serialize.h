@@ -16,9 +16,11 @@ public:
     static std::pair<uint64_t, size_t> decodeVarInt(const std::vector<uint8_t>& data, size_t offset = 0);
     
     // Little-endian encoding/decoding
+    static std::vector<uint8_t> encodeUint8LE(uint8_t value);
     static std::vector<uint8_t> encodeUint16LE(uint16_t value);
     static std::vector<uint8_t> encodeUint32LE(uint32_t value);
     static std::vector<uint8_t> encodeUint64LE(uint64_t value);
+    static uint8_t decodeUint8LE(const std::vector<uint8_t>& data, size_t offset = 0);
     static uint16_t decodeUint16LE(const std::vector<uint8_t>& data, size_t offset = 0);
     static uint32_t decodeUint32LE(const std::vector<uint8_t>& data, size_t offset = 0);
     static uint64_t decodeUint64LE(const std::vector<uint8_t>& data, size_t offset = 0);
