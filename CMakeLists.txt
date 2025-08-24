@@ -29,6 +29,10 @@ set(SOURCES
     src/network/peer.cpp  
     src/network/p2p.cpp
     src/network/p2p_test.cpp
+    # Wallet and RPC
+    src/wallet/wallet.cpp
+    src/rpc/rpc.cpp
+    src/rpc/cli.cpp
 )
 
 # Headers
@@ -48,13 +52,40 @@ set(HEADERS
     src/network/protocol.h
     src/network/peer.h
     src/network/p2p.h
+    # Wallet and RPC
+    src/wallet/wallet.h
+    src/rpc/rpc.h
 )
 
 # Main executable
 add_executable(pragma-node src/main.cpp ${SOURCES})
 
+# Wallet and RPC test executable
+add_executable(pragma-wallet-test src/wallet_rpc_test.cpp ${SOURCES})
+
+# CLI Wallet application
+add_executable(pragma-wallet src/wallet_cli.cpp ${SOURCES})
+
+# RPC Server application
+add_executable(pragma-rpc-server src/rpc_server.cpp ${SOURCES})
+
 # Link libraries
 target_link_libraries(pragma-node 
+    OpenSSL::SSL 
+    OpenSSL::Crypto
+)
+
+target_link_libraries(pragma-wallet-test 
+    OpenSSL::SSL 
+    OpenSSL::Crypto
+)
+
+target_link_libraries(pragma-wallet 
+    OpenSSL::SSL 
+    OpenSSL::Crypto
+)
+
+target_link_libraries(pragma-rpc-server 
     OpenSSL::SSL 
     OpenSSL::Crypto
 )

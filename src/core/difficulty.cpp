@@ -6,6 +6,9 @@
 
 namespace pragma {
 
+// Define static constants (required for linking)
+const uint32_t Difficulty::MAX_BITS;
+
 // Define the adjustment factor constants
 const double Difficulty::MAX_ADJUSTMENT_FACTOR = 4.0; // 4x max increase
 const double Difficulty::MIN_ADJUSTMENT_FACTOR = 0.25; // 4x max decrease
