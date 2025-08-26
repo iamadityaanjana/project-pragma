@@ -225,6 +225,9 @@ private:
     void updateBalance();
     uint64_t calculateFee(const Transaction& tx, uint64_t feeRate) const;
     
+    // Internal helper for address generation (assumes mutex already held)
+    Address generateNewAddressInternal(const std::string& label = "");
+    
     // Wallet data
     std::string walletPath_;
     std::unordered_map<std::string, WalletKey> keys_;  // address -> key

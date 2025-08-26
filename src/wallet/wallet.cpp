@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <sstream>
 #include <chrono>
+#include <iostream>
 
 namespace pragma {
 
@@ -21,8 +22,12 @@ PrivateKey::PrivateKey(const std::vector<uint8_t>& keyData) : keyData_(keyData) 
 
 PrivateKey PrivateKey::generateRandom() {
     std::vector<uint8_t> keyData(32);
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    
+    // Use time-based seed instead of random_device to avoid hanging
+    auto now = std::chrono::high_resolution_clock::now();
+    auto duration = now.time_since_epoch();
+    auto seed = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+    std::mt19937 gen(static_cast<uint32_t>(seed));
     std::uniform_int_distribution<uint8_t> dis(0, 255);
     
     for (auto& byte : keyData) {
@@ -151,8 +156,8 @@ Wallet::~Wallet() {
 bool Wallet::create(const std::string& passphrase) {
     std::lock_guard<std::mutex> lock(walletMutex_);
     
-    // Generate the first address
-    generateNewAddress("default");
+    // Generate the first address (using internal method to avoid deadlock)
+    generateNewAddressInternal("default");
     
     if (!passphrase.empty()) {
         encryptWallet(passphrase);
@@ -182,7 +187,10 @@ bool Wallet::save() const {
 
 Address Wallet::generateNewAddress(const std::string& label) {
     std::lock_guard<std::mutex> lock(walletMutex_);
-    
+    return generateNewAddressInternal(label);
+}
+
+Address Wallet::generateNewAddressInternal(const std::string& label) {
     auto privateKey = PrivateKey::generateRandom();
     WalletKey walletKey(privateKey, label);
     
@@ -537,11 +545,14 @@ bool Wallet::saveToFile() const {
         const auto& address = pair.first;
         const auto& key = pair.second;
         
-        file << "KEY:" << address << ":" << key.privateKey.toWIF() << ":"
+        std::string wif = key.privateKey.toWIF();
+        
+        file << "KEY:" << address << ":" << wif << ":"
              << key.label << ":" << key.creationTime << ":"
              << (key.isChangeAddress ? "1" : "0") << "\n";
     }
     
+    file.close();
     return true;
 }
 
@@ -573,6 +584,7 @@ std::shared_ptr<Wallet> WalletManager::createWallet(const std::string& name, con
     }
     
     auto wallet = std::make_shared<Wallet>(name + ".dat");
+    
     if (wallet->create(passphrase)) {
         wallets_[name] = wallet;
         if (defaultWallet_.empty()) {

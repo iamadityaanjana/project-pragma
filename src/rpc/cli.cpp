@@ -9,7 +9,7 @@ namespace pragma {
 
 // CLI implementation
 CLI::CLI(std::shared_ptr<WalletManager> walletManager) 
-    : walletManager_(walletManager), running_(true) {
+    : walletManager_(walletManager), running_(true), isInteractive_(isatty(STDIN_FILENO)) {
 }
 
 void CLI::run() {
@@ -122,10 +122,8 @@ void CLI::createWallet(const std::vector<std::string>& args) {
     std::string name = args[0];
     std::string passphrase = args.size() > 1 ? args[1] : "";
     
-    if (passphrase.empty()) {
-        std::cout << "Enter passphrase (or press Enter for no encryption): ";
-        passphrase = getPassword("");
-    }
+    // For command line usage, skip password prompting entirely
+    // Use empty passphrase if not provided
     
     auto wallet = walletManager_->createWallet(name, passphrase);
     if (wallet) {

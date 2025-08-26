@@ -232,6 +232,7 @@ private:
     std::shared_ptr<WalletManager> walletManager_;
     std::string currentWallet_;
     bool running_;
+    bool isInteractive_;
     
     std::vector<std::string> parseCommand(const std::string& command);
     std::shared_ptr<Wallet> getCurrentWallet();
