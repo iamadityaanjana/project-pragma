@@ -1,0 +1,55 @@
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -I. -I./src -pthread
+LDFLAGS = -pthread -lcrypto -lssl
+
+# Core source files that work
+WORKING_CORE_SOURCES = src/core/block.cpp \
+                       src/core/chainstate.cpp \
+                       src/core/difficulty.cpp \
+                       src/core/mempool.cpp \
+                       src/core/merkle.cpp \
+                       src/core/retargeting.cpp \
+                       src/core/transaction.cpp \
+                       src/core/utxo.cpp \
+                       src/core/validator.cpp
+
+PRIMITIVES_SOURCES = src/primitives/serialize.cpp
+
+WALLET_SOURCES = src/wallet/wallet.cpp
+
+# Working sources only
+WORKING_SOURCES = $(WORKING_CORE_SOURCES) $(PRIMITIVES_SOURCES) $(WALLET_SOURCES)
+WORKING_OBJECTS = $(WORKING_SOURCES:.cpp=.o)
+
+# Targets
+DEMO_TARGET = simple_demo
+
+.PHONY: all clean demo help
+
+all: demo
+
+demo: $(DEMO_TARGET)
+
+# Simple blockchain demo
+$(DEMO_TARGET): simple_demo.cpp $(WORKING_OBJECTS)
+	@echo "Building simple blockchain demo..."
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+# Individual object files
+%.o: %.cpp
+	@echo "Compiling $<..."
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	@echo "Cleaning up..."
+	rm -f $(WORKING_OBJECTS) $(DEMO_TARGET)
+	rm -rf pragma_data_*
+	rm -f *.log
+
+# Help target
+help:
+	@echo "Available targets:"
+	@echo "  all     - Build simple blockchain demo (default)"
+	@echo "  demo    - Build simple blockchain demo"
+	@echo "  clean   - Remove all build artifacts"
+	@echo "  help    - Show this help message"
